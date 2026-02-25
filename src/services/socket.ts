@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
-import { updateTask, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
+import { updateTask, updateTaskPartial, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
 import { updateAgent, setAgents } from '../store/slices/agentSlice';
 import { showTaskCompletedNotification } from './notificationsLocal';
 
@@ -41,11 +41,11 @@ class SocketService {
       store.dispatch(addTask(task));
     });
 
-    this.socket.on('task:updated', (task: { id: string; title?: string; status?: string }) => {
+    this.socket.on('task:updated', (task: { id: string; title?: string; status?: 'pending' | 'in_progress' | 'completed' | 'failed' }) => {
       if (task?.status === 'completed') {
         showTaskCompletedNotification(task?.title ?? 'Task');
       }
-      store.dispatch(updateTask(task));
+      store.dispatch(updateTaskPartial(task));
     });
 
     this.socket.on('task:deleted', (taskId: string) => {

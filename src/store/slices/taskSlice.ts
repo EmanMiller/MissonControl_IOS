@@ -50,6 +50,16 @@ const taskSlice = createSlice({
         }
       }
     },
+    updateTaskPartial: (state, action: PayloadAction<Partial<Task> & { id: string }>) => {
+      const index = state.tasks.findIndex(task => task.id === action.payload.id);
+      if (index !== -1) {
+        const wasCompleted = state.tasks[index].status === 'completed';
+        state.tasks[index] = { ...state.tasks[index], ...action.payload };
+        if (action.payload.status === 'completed' && !wasCompleted) {
+          state.newCompletedCount += 1;
+        }
+      }
+    },
     markCompletedTasksSeen: (state) => {
       state.newCompletedCount = 0;
     },
@@ -122,6 +132,7 @@ export const {
   setTasks,
   addTask,
   updateTask,
+  updateTaskPartial,
   removeTask,
   setError,
   clearError,

@@ -13,14 +13,14 @@ class NotificationService {
 
     PushNotification.configure({
       // Called when Token is generated (iOS and Android)
-      onRegister: (token) => {
+      onRegister: (token: any) => {
         console.log('Push notification token:', token);
         // TODO: Send token to backend
         this.sendTokenToBackend(token.token);
       },
 
       // Called when a remote notification is received
-      onNotification: (notification) => {
+      onNotification: (notification: any) => {
         console.log('Notification received:', notification);
         
         // Handle notification based on app state
@@ -30,18 +30,15 @@ class NotificationService {
         }
       },
 
-      // Called when a remote notification is received while app is open
-      onRemoteNotification: (notification) => {
-        console.log('Remote notification:', notification);
-      },
+      // Note: onRemoteNotification removed as it's handled by onNotification
 
       // iOS only: Called when Registered Action is pressed
-      onAction: (notification) => {
+      onAction: (notification: any) => {
         console.log('Notification action:', notification.action);
       },
 
       // iOS only
-      onRegistrationError: (err) => {
+      onRegistrationError: (err: any) => {
         console.error('Push notification registration error:', err.message, err);
       },
 

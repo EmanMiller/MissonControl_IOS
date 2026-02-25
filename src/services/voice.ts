@@ -171,7 +171,8 @@ class VoiceService {
   // Check if voice recognition is available
   async isAvailable(): Promise<boolean> {
     try {
-      return await Voice.isAvailable();
+      const available = await Voice.isAvailable();
+      return Boolean(available);
     } catch (error) {
       console.error('Voice recognition not available:', error);
       return false;

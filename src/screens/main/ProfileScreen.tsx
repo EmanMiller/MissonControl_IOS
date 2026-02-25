@@ -44,7 +44,9 @@ const MenuButton: React.FC<{
 
 const ProfileScreen: React.FC = () => {
   const dispatch = useDispatch();
-  const { user, devMode } = useSelector((state: RootState) => state.auth);
+  const auth = useSelector((state: RootState) => state.auth);
+  const user = auth?.user ?? null;
+  const devMode = auth?.devMode ?? true;
 
   const handleLogout = () => {
     Alert.alert(
