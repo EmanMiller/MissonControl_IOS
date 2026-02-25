@@ -15,7 +15,7 @@ export type RootStackParamList = {
 const Stack = createStackNavigator<RootStackParamList>();
 
 const AppNavigator: React.FC = () => {
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const isAuthenticated = useSelector((state: RootState) => state.auth?.isAuthenticated ?? false);
 
   return (
     <NavigationContainer theme={darkTheme}>

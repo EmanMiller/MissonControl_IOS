@@ -19,7 +19,10 @@ import LoadingSkeleton from '../../components/LoadingSkeleton';
 
 const AgentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { agents, isLoading, error } = useSelector((state: RootState) => state.agents);
+  const agentsState = useSelector((state: RootState) => state.agents);
+  const agents = agentsState?.agents ?? [];
+  const isLoading = agentsState?.isLoading ?? false;
+  const error = agentsState?.error ?? null;
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {

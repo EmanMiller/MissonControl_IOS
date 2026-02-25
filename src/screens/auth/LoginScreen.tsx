@@ -14,7 +14,10 @@ import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 
 const LoginScreen: React.FC = () => {
   const dispatch = useDispatch();
-  const { isLoading, error, devMode } = useSelector((state: RootState) => state.auth);
+  const auth = useSelector((state: RootState) => state.auth);
+  const isLoading = auth?.isLoading ?? false;
+  const error = auth?.error ?? null;
+  const devMode = auth?.devMode ?? true;
 
   const handleDevLogin = () => {
     if (devMode) {

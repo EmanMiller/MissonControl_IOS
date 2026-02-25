@@ -13,7 +13,8 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../../store';
-import { fetchTasks, markCompletedTasksSeen } from '../../store/slices/taskSlice';
+import { markCompletedTasksSeen } from '../../store/slices/taskSlice';
+import { fetchTasks } from '../../store/thunks/taskThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Task } from '../../store/slices/taskSlice';
 import ConnectionStatus from '../../components/ConnectionStatus';
@@ -69,7 +70,10 @@ const StatusBadge: React.FC<{ status: Task['status'] }> = ({ status }) => {
 const TasksScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation();
-  const { tasks, isLoading, error } = useSelector((state: RootState) => state.tasks);
+  const tasksState = useSelector((state: RootState) => state.tasks);
+  const tasks = tasksState?.tasks ?? [];
+  const isLoading = tasksState?.isLoading ?? false;
+  const error = tasksState?.error ?? null;
   const [refreshing, setRefreshing] = React.useState(false);
 
   useEffect(() => {
