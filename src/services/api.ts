@@ -1,70 +1,111 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../store/slices/taskSlice';
 import { Agent } from '../store/slices/agentSlice';
+import { API_BASE_URL, API_HEALTH_URLS, OPENCLAW_ORIGIN } from '../config/network';
+import { localData } from './localData';
 
-const BASE_URL = 'http://localhost:3001/api';
 const AUTH_TOKEN_KEY = 'auth_token';
+
+type ApiMode = 'remote' | 'local';
 
 class ApiService {
   private client: AxiosInstance;
   private authToken: string | null = null;
+  private mode: ApiMode = 'remote';
+  private lastConnectionMessage = 'Not checked yet';
+  private lastErrorSignature: string | null = null;
 
   constructor() {
     this.client = axios.create({
-      baseURL: BASE_URL,
+      baseURL: API_BASE_URL,
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Load auth token on initialization
     this.loadAuthToken();
 
-    // Request interceptor for auth token
     this.client.interceptors.request.use(
-      (config) => {
+      config => {
         if (this.authToken) {
           config.headers.Authorization = `Bearer ${this.authToken}`;
         }
         console.log('API Request:', config.method?.toUpperCase(), config.url);
         return config;
       },
-      (error) => {
-        console.error('API Request Error:', error);
-        return Promise.reject(error);
-      }
+      error => Promise.reject(error)
     );
 
-    // Response interceptor for error handling
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
+        this.lastErrorSignature = null;
+        this.setMode('remote', `Connected to OpenClaw API (${API_BASE_URL})`);
         console.log('API Response:', response.status, response.config.url);
         return response;
       },
-      (error) => {
+      (error: AxiosError<any>) => {
         const status = error.response?.status;
-        const message = error.response?.data?.message || error.message;
-        console.error('API Error:', status, message, error.config?.url);
-        
-        // Handle 401 Unauthorized - token expired/invalid
+        const message = (error.response?.data as { message?: string } | undefined)?.message || error.message;
+        const url = error.config?.url ?? 'unknown';
+
         if (status === 401) {
           this.clearAuthToken();
         }
-        
+
+        this.logErrorOnce(status, message, url);
+
+        if (!status) {
+          this.setMode('local', `OpenClaw API is unreachable at ${API_BASE_URL}. Using local data.`);
+        }
+
         return Promise.reject(error);
       }
     );
   }
 
-  // Auth token management
+  private logErrorOnce(status: number | undefined, message: string, url: string) {
+    const signature = `${status ?? 'network'}:${url}:${message}`;
+    if (this.lastErrorSignature === signature) {
+      return;
+    }
+
+    this.lastErrorSignature = signature;
+    console.warn('API Error:', status, message, url);
+  }
+
+  private setMode(mode: ApiMode, message: string) {
+    this.mode = mode;
+    this.lastConnectionMessage = message;
+  }
+
+  private isNetworkError(error: any) {
+    return !error?.response;
+  }
+
+  private async probe(url: string): Promise<{ reachable: boolean; status?: number }> {
+    try {
+      const response = await axios.get(url, {
+        timeout: 4000,
+        validateStatus: () => true,
+      });
+      return {
+        reachable: true,
+        status: response.status,
+      };
+    } catch {
+      return {
+        reachable: false,
+      };
+    }
+  }
+
   private async loadAuthToken() {
     try {
       const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
       if (token) {
         this.authToken = token;
-        console.log('Auth token loaded from storage');
       }
     } catch (error) {
       console.error('Failed to load auth token:', error);
@@ -75,7 +116,6 @@ class ApiService {
     try {
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
       this.authToken = token;
-      console.log('Auth token saved to storage');
     } catch (error) {
       console.error('Failed to save auth token:', error);
     }
@@ -85,116 +125,202 @@ class ApiService {
     try {
       await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
       this.authToken = null;
-      console.log('Auth token cleared from storage');
     } catch (error) {
       console.error('Failed to clear auth token:', error);
     }
   }
 
-  // Connection test
-  async testConnection(): Promise<{ connected: boolean; message: string }> {
-    try {
-      console.log('Testing API connection to:', BASE_URL);
-      
-      // Try a simple request to see if server is responding
-      const response = await axios.get(BASE_URL, { timeout: 5000 });
-      return {
-        connected: true,
-        message: 'Server is responding'
-      };
-    } catch (error: any) {
-      console.error('Connection test failed:', error);
-      
-      if (error.code === 'ECONNREFUSED') {
-        return {
-          connected: false,
-          message: 'Server is not running on localhost:3001'
-        };
-      }
-      
-      if (error.response) {
-        return {
-          connected: true,
-          message: `Server responding with status: ${error.response.status}`
-        };
-      }
-      
-      return {
-        connected: false,
-        message: `Connection failed: ${error.message}`
-      };
-    }
+  getApiBaseUrl(): string {
+    return API_BASE_URL;
   }
 
-  // Task API methods
+  getOpenClawOrigin(): string {
+    return OPENCLAW_ORIGIN;
+  }
+
+  isUsingLocalData(): boolean {
+    return this.mode === 'local';
+  }
+
+  getConnectionMessage(): string {
+    return this.lastConnectionMessage;
+  }
+
+  async testConnection(): Promise<{ connected: boolean; message: string }> {
+    console.log('Testing API connection to:', API_BASE_URL);
+
+    for (const healthUrl of API_HEALTH_URLS) {
+      const result = await this.probe(healthUrl);
+      if (result.reachable && result.status && result.status < 500) {
+        this.setMode('remote', `Connected to OpenClaw API (status ${result.status})`);
+        return {
+          connected: true,
+          message: `OpenClaw API reachable (${result.status})`,
+        };
+      }
+    }
+
+    const tasksProbe = await this.probe(`${API_BASE_URL}/tasks`);
+    if (tasksProbe.reachable && tasksProbe.status) {
+      if (tasksProbe.status === 401 || tasksProbe.status === 403) {
+        this.setMode('remote', 'OpenClaw API reachable; authentication required.');
+        return {
+          connected: true,
+          message: 'OpenClaw API reachable - authentication required',
+        };
+      }
+
+      if (tasksProbe.status < 500) {
+        this.setMode('remote', `OpenClaw API reachable (status ${tasksProbe.status})`);
+        return {
+          connected: true,
+          message: `OpenClaw API reachable (status ${tasksProbe.status})`,
+        };
+      }
+    }
+
+    const rootProbe = await this.probe(OPENCLAW_ORIGIN);
+    if (rootProbe.reachable) {
+      this.setMode('local', `OpenClaw is reachable at ${OPENCLAW_ORIGIN}, but API route ${API_BASE_URL} is unavailable. Using local data.`);
+      return {
+        connected: true,
+        message: 'OpenClaw reachable, but API endpoints are unavailable. Using local data.',
+      };
+    }
+
+    this.setMode('local', `OpenClaw is unreachable at ${OPENCLAW_ORIGIN}. Using local data.`);
+    return {
+      connected: false,
+      message: `Cannot reach OpenClaw at ${OPENCLAW_ORIGIN}. Using local data.`,
+    };
+  }
+
   async getTasks(): Promise<Task[]> {
     try {
       const response = await this.client.get('/tasks');
-      return response.data;
+      return Array.isArray(response.data) ? response.data : [];
     } catch (error: any) {
-      if (error.response?.status === 401) {
-        console.log('Tasks request requires authentication');
-        // For demo purposes, return empty array when not authenticated
-        // In production, this should trigger a login flow
-        return [];
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        this.setMode('local', 'Authentication required for /tasks. Showing local task data.');
+        return localData.getTasks();
       }
+
+      if (this.isNetworkError(error) || status === 404) {
+        this.setMode('local', 'Tasks endpoint unavailable. Showing local task data.');
+        return localData.getTasks();
+      }
+
       throw error;
     }
   }
 
   async createTask(task: Partial<Task>): Promise<Task> {
-    const response = await this.client.post('/tasks', task);
-    return response.data;
-  }
-
-  async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
-    const response = await this.client.put(`/tasks/${id}`, updates);
-    return response.data;
-  }
-
-  async deleteTask(id: string): Promise<void> {
-    await this.client.delete(`/tasks/${id}`);
-  }
-
-  async getTaskById(id: string): Promise<Task> {
-    const response = await this.client.get(`/tasks/${id}`);
-    return response.data;
-  }
-
-  // Agent API methods
-  async getAgents(): Promise<Agent[]> {
     try {
-      const response = await this.client.get('/agents');
+      const response = await this.client.post('/tasks', task);
       return response.data;
     } catch (error: any) {
-      if (error.response?.status === 401) {
-        console.log('Agents request requires authentication');
-        // For demo purposes, return empty array when not authenticated
-        // In production, this should trigger a login flow
-        return [];
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 401 || status === 403 || status === 404) {
+        this.setMode('local', 'Create task API unavailable. Saving task locally.');
+        return localData.createTask(task);
       }
       throw error;
     }
   }
 
-  async getAgentById(id: string): Promise<Agent> {
-    const response = await this.client.get(`/agents/${id}`);
-    return response.data;
+  async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
+    try {
+      const response = await this.client.put(`/tasks/${id}`, updates);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 401 || status === 403 || status === 404) {
+        this.setMode('local', 'Update task API unavailable. Updating task locally.');
+        return localData.updateTask(id, updates);
+      }
+      throw error;
+    }
   }
 
-  // Auth API methods
+  async deleteTask(id: string): Promise<void> {
+    try {
+      await this.client.delete(`/tasks/${id}`);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 401 || status === 403 || status === 404) {
+        this.setMode('local', 'Delete task API unavailable. Deleting task locally.');
+        localData.deleteTask(id);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  async getTaskById(id: string): Promise<Task> {
+    try {
+      const response = await this.client.get(`/tasks/${id}`);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 401 || status === 403 || status === 404) {
+        this.setMode('local', 'Task lookup API unavailable. Using local data.');
+        const task = localData.getTaskById(id);
+        if (task) {
+          return task;
+        }
+      }
+      throw error;
+    }
+  }
+
+  async getAgents(): Promise<Agent[]> {
+    try {
+      const response = await this.client.get('/agents');
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        this.setMode('local', 'Authentication required for /agents. Showing local agent data.');
+        return localData.getAgents();
+      }
+
+      if (this.isNetworkError(error) || status === 404) {
+        this.setMode('local', 'Agents endpoint unavailable. Showing local agent data.');
+        return localData.getAgents();
+      }
+
+      throw error;
+    }
+  }
+
+  async getAgentById(id: string): Promise<Agent> {
+    try {
+      const response = await this.client.get(`/agents/${id}`);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 401 || status === 403 || status === 404) {
+        this.setMode('local', 'Agent lookup API unavailable. Using local data.');
+        const agent = localData.getAgentById(id);
+        if (agent) {
+          return agent;
+        }
+      }
+      throw error;
+    }
+  }
+
   async login(credentials: { username: string; password: string }): Promise<{ token: string; user: any }> {
     try {
-      console.log('Attempting login for user:', credentials.username);
       const response = await this.client.post('/auth/login', credentials);
-      
+
       if (response.data.token) {
         await this.saveAuthToken(response.data.token);
       }
-      
+
       return response.data;
     } catch (error: any) {
-      console.error('Login failed:', error.response?.data || error.message);
       throw error;
     }
   }
@@ -203,65 +329,74 @@ class ApiService {
     try {
       await this.client.post('/auth/logout');
       await this.clearAuthToken();
-      console.log('Logged out successfully');
-    } catch (error: any) {
-      console.error('Logout failed:', error);
-      // Clear token anyway on logout attempt
+    } catch (error) {
       await this.clearAuthToken();
       throw error;
     }
   }
 
-  // Check if user is authenticated
   isAuthenticated(): boolean {
     return !!this.authToken;
   }
 
-  // Get current auth token
   getAuthToken(): string | null {
     return this.authToken;
   }
 
-  // Health check
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    try {
-      const response = await this.client.get('/health');
-      return response.data;
-    } catch (error: any) {
-      console.error('Health check failed:', error);
-      throw error;
-    }
+    const connection = await this.testConnection();
+    return {
+      status: connection.connected ? 'ok' : 'offline',
+      timestamp: new Date().toISOString(),
+    };
   }
 
-  // Test auth endpoint specifically
   async testAuth(): Promise<{ success: boolean; message: string }> {
     try {
-      console.log('Testing auth endpoint...');
-      
-      // Try with a test request to tasks (which requires auth)
-      const response = await this.client.get('/tasks');
-      return {
-        success: true,
-        message: 'Authentication working - got tasks response'
-      };
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+      const response = await this.client.get('/tasks', {
+        validateStatus: () => true,
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        this.setMode('remote', 'Authenticated with OpenClaw API.');
         return {
-          success: false,
-          message: 'Authentication required - no valid token'
+          success: true,
+          message: 'Authentication working - tasks endpoint accessible',
         };
       }
-      
-      if (error.response?.status === 404) {
+
+      if (response.status === 401 || response.status === 403) {
+        this.setMode('local', 'Authentication required. Showing local fallback data.');
         return {
           success: false,
-          message: 'Tasks endpoint not found'
+          message: 'Authentication required - using local data',
         };
       }
-      
+
+      if (response.status === 404) {
+        this.setMode('local', 'Tasks endpoint not found. Showing local fallback data.');
+        return {
+          success: false,
+          message: 'Tasks endpoint not found - using local data',
+        };
+      }
+
       return {
         success: false,
-        message: `Auth test failed: ${error.message}`
+        message: `Unexpected auth response status: ${response.status}`,
+      };
+    } catch (error: any) {
+      if (this.isNetworkError(error)) {
+        this.setMode('local', 'OpenClaw network unavailable. Showing local fallback data.');
+        return {
+          success: false,
+          message: 'OpenClaw unreachable - using local data',
+        };
+      }
+
+      return {
+        success: false,
+        message: `Auth test failed: ${error.message}`,
       };
     }
   }

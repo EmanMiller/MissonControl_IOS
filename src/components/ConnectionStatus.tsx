@@ -6,6 +6,7 @@ import { colors, spacing, typography, borderRadius } from '../styles/theme';
 interface ConnectionState {
   serverConnected: boolean;
   authRequired: boolean;
+  usingLocalData: boolean;
   lastChecked: Date | null;
   message: string;
 }
@@ -14,34 +15,56 @@ const ConnectionStatus: React.FC = () => {
   const [status, setStatus] = useState<ConnectionState>({
     serverConnected: false,
     authRequired: false,
+    usingLocalData: false,
     lastChecked: null,
     message: 'Checking connection...'
   });
-  
+
   const [isChecking, setIsChecking] = useState(false);
 
   const checkConnection = async () => {
     setIsChecking(true);
-    
+
     try {
       // Test basic server connection
       const connectionTest = await apiService.testConnection();
-      
-      // Test auth requirement
+
+      if (!connectionTest.connected) {
+        setStatus({
+          serverConnected: false,
+          authRequired: false,
+          usingLocalData: true,
+          lastChecked: new Date(),
+          message: connectionTest.message,
+        });
+        return;
+      }
+
       const authTest = await apiService.testAuth();
-      
+      const authRequired = !authTest.success && authTest.message.includes('Authentication required');
+      const usingLocalData = apiService.isUsingLocalData();
+
+      let message = connectionTest.message;
+      if (authTest.success) {
+        message = 'Connected & Authenticated';
+      } else if (authRequired) {
+        message = 'Connected - Auth Required (Local Data Enabled)';
+      } else if (usingLocalData) {
+        message = authTest.message;
+      }
+
       setStatus({
-        serverConnected: connectionTest.connected,
-        authRequired: !authTest.success && authTest.message.includes('Authentication required'),
+        serverConnected: true,
+        authRequired,
+        usingLocalData,
         lastChecked: new Date(),
-        message: connectionTest.connected 
-          ? (authTest.success ? 'Connected & Authenticated' : 'Connected - Auth Required')
-          : connectionTest.message
+        message,
       });
     } catch (error: any) {
       setStatus({
         serverConnected: false,
         authRequired: false,
+        usingLocalData: true,
         lastChecked: new Date(),
         message: `Connection failed: ${error.message}`
       });
@@ -81,11 +104,11 @@ const ConnectionStatus: React.FC = () => {
             </Text>
           )}
         </View>
-        
+
         <Text style={styles.statusMessage} numberOfLines={2}>
           {status.message}
         </Text>
-        
+
         {status.serverConnected && (
           <View style={styles.details}>
             <Text style={styles.detailItem}>
@@ -94,11 +117,14 @@ const ConnectionStatus: React.FC = () => {
             <Text style={styles.detailItem}>
               🔐 Auth: {apiService.isAuthenticated() ? 'Authenticated' : 'Not Authenticated'}
             </Text>
+            <Text style={styles.detailItem}>
+              💾 Data Mode: {status.usingLocalData ? 'Local Fallback' : 'OpenClaw API'}
+            </Text>
           </View>
         )}
-        
-        <TouchableOpacity 
-          style={[styles.refreshButton, { opacity: isChecking ? 0.5 : 1 }]} 
+
+        <TouchableOpacity
+          style={[styles.refreshButton, isChecking && styles.refreshButtonDisabled]}
           onPress={checkConnection}
           disabled={isChecking}
         >
@@ -158,6 +184,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     backgroundColor: colors.primary + '20',
     borderRadius: borderRadius.small,
+  },
+  refreshButtonDisabled: {
+    opacity: 0.5,
   },
   refreshText: {
     fontSize: typography.footnote,

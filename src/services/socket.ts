@@ -1,43 +1,60 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
-import { updateTask, updateTaskPartial, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
+import { updateTaskPartial, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
 import { updateAgent, setAgents } from '../store/slices/agentSlice';
 import { showTaskCompletedNotification } from './notificationsLocal';
+import { SOCKET_URL } from '../config/network';
 
-const SOCKET_URL = 'http://localhost:3001';
+const RECONNECT_ATTEMPTS = 2;
+const RECONNECT_DELAY_MS = 1500;
+const RETRY_COOLDOWN_MS = 30000;
 
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private disabledUntil = 0;
+  private hasLoggedUnavailable = false;
 
   connect() {
     if (this.socket?.connected) {
-      return;
+      return this.socket;
+    }
+
+    if (Date.now() < this.disabledUntil) {
+      return null;
     }
 
     this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
-      timeout: 20000,
+      timeout: 5000,
+      reconnection: true,
+      reconnectionAttempts: RECONNECT_ATTEMPTS,
+      reconnectionDelay: RECONNECT_DELAY_MS,
     });
 
     this.socket.on('connect', () => {
-      console.log('✅ Socket connected');
       this.isConnected = true;
+      this.hasLoggedUnavailable = false;
+      console.log('Socket connected');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('❌ Socket disconnected');
       this.isConnected = false;
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('🔥 Socket connection error:', error);
+    this.socket.on('connect_error', () => {
       this.isConnected = false;
+      this.disabledUntil = Date.now() + RETRY_COOLDOWN_MS;
+
+      if (!this.hasLoggedUnavailable) {
+        this.hasLoggedUnavailable = true;
+        console.warn(`Socket unavailable at ${SOCKET_URL}. Realtime updates are paused.`);
+      }
+
+      this.disconnect();
     });
 
-    // Task events
-    this.socket.on('task:created', (task) => {
-      console.log('📋 Task created:', task);
+    this.socket.on('task:created', task => {
       store.dispatch(addTask(task));
     });
 
@@ -49,24 +66,18 @@ class SocketService {
     });
 
     this.socket.on('task:deleted', (taskId: string) => {
-      console.log('🗑️ Task deleted:', taskId);
       store.dispatch(removeTask(taskId));
     });
 
-    // Agent events
-    this.socket.on('agent:status_changed', (agent) => {
-      console.log('🤖 Agent status changed:', agent);
+    this.socket.on('agent:status_changed', agent => {
       store.dispatch(updateAgent(agent));
     });
 
-    this.socket.on('agents:list', (agents) => {
-      console.log('👥 Agents list updated:', agents);
+    this.socket.on('agents:list', agents => {
       store.dispatch(setAgents(agents));
     });
 
-    // Bulk data events
-    this.socket.on('data:sync', (data) => {
-      console.log('🔄 Data sync received:', data);
+    this.socket.on('data:sync', data => {
       if (data.tasks) {
         store.dispatch(setTasks(data.tasks));
       }
@@ -86,7 +97,6 @@ class SocketService {
     }
   }
 
-  // Emit events
   joinRoom(roomId: string) {
     if (this.socket?.connected) {
       this.socket.emit('join_room', roomId);
@@ -99,7 +109,6 @@ class SocketService {
     }
   }
 
-  // Task operations
   createTask(taskData: any) {
     if (this.socket?.connected) {
       this.socket.emit('task:create', taskData);
@@ -112,14 +121,12 @@ class SocketService {
     }
   }
 
-  // Agent operations
   requestAgentUpdate(agentId?: string) {
     if (this.socket?.connected) {
       this.socket.emit('agent:request_update', { agentId });
     }
   }
 
-  // Voice task creation
   sendVoiceTask(audioData: string, transcript?: string) {
     if (this.socket?.connected) {
       this.socket.emit('voice:task_create', { audioData, transcript });

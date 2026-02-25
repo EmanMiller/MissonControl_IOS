@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   RefreshControl,
@@ -16,6 +15,7 @@ import { Agent } from '../../store/slices/agentSlice';
 import EmptyState from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const AgentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();

@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootState } from '../../store';
 import { devLogin } from '../../store/slices/authSlice';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';

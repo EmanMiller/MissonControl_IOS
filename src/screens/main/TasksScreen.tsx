@@ -3,11 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   Animated,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -21,6 +19,7 @@ import ConnectionStatus from '../../components/ConnectionStatus';
 import EmptyState from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const StatusBadge: React.FC<{ status: Task['status'] }> = ({ status }) => {
   const scale = useRef(new Animated.Value(1)).current;

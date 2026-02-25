@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
 } from 'react-native';
@@ -11,6 +10,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MenuButton: React.FC<{
   title: string;

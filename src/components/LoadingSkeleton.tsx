@@ -29,6 +29,8 @@ const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({ lines = 4, style }) =
     return () => loop.stop();
   }, [opacity]);
 
+  const animatedLineStyle = { opacity };
+
   return (
     <View style={[styles.container, style]}>
       {Array.from({ length: lines }).map((_, i) => (
@@ -36,7 +38,8 @@ const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({ lines = 4, style }) =
           key={i}
           style={[
             styles.line,
-            { width: i === lines - 1 && lines > 2 ? '60%' : '100%', opacity },
+            i === lines - 1 && lines > 2 && styles.shortLine,
+            animatedLineStyle,
           ]}
         />
       ))}
@@ -49,10 +52,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   line: {
+    width: '100%',
     height: 16,
     backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.small,
     marginBottom: spacing.sm,
+  },
+  shortLine: {
+    width: '60%',
   },
 });
 

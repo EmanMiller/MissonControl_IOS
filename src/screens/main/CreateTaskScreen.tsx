@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TextInput,
   TouchableOpacity,
   Alert,
@@ -14,8 +13,10 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { createTask } from '../../store/thunks/taskThunks';
+import { fetchAgents } from '../../store/thunks/agentThunks';
 import { RootState, AppDispatch } from '../../store';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CreateTaskScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -30,6 +31,12 @@ const CreateTaskScreen: React.FC = () => {
     description: '',
     assignedAgent: '',
   });
+
+  useEffect(() => {
+    if (agents.length === 0) {
+      dispatch(fetchAgents());
+    }
+  }, [agents.length, dispatch]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -58,7 +65,7 @@ const CreateTaskScreen: React.FC = () => {
       Alert.alert('Success', 'Task created successfully', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to create task. Please try again.');
     }
   };
