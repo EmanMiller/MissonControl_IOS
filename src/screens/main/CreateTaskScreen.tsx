@@ -21,8 +21,8 @@ const CreateTaskScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation();
   const { isLoading, agents } = useSelector((state: RootState) => ({
-    isLoading: state.tasks.isLoading,
-    agents: state.agents.agents,
+    isLoading: state.tasks?.isLoading ?? false,
+    agents: state.agents?.agents ?? [],
   }));
 
   const [formData, setFormData] = useState({
@@ -285,3 +285,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 });
+
+export default CreateTaskScreen;

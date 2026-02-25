@@ -1,22 +1,51 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  Animated,
 } from 'react-native';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { RootState, AppDispatch } from '../../store';
+import { markCompletedTasksSeen } from '../../store/slices/taskSlice';
+import { fetchTasks } from '../../store/thunks/taskThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Task } from '../../store/slices/taskSlice';
+import ConnectionStatus from '../../components/ConnectionStatus';
+import EmptyState from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
+import LoadingSkeleton from '../../components/LoadingSkeleton';
 
-const TasksScreen: React.FC = () => {
-  const { tasks } = useSelector((state: RootState) => state.tasks);
+const StatusBadge: React.FC<{ status: Task['status'] }> = ({ status }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const prevStatus = useRef(status);
 
-  const getStatusColor = (status: Task['status']) => {
-    switch (status) {
+  React.useEffect(() => {
+    if (prevStatus.current !== status) {
+      prevStatus.current = status;
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.08,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [status, scale]);
+
+  const getStatusColor = (s: Task['status']) => {
+    switch (s) {
       case 'completed': return colors.success;
       case 'in_progress': return colors.primary;
       case 'failed': return colors.error;
@@ -24,62 +53,115 @@ const TasksScreen: React.FC = () => {
     }
   };
 
+  return (
+    <Animated.View
+      style={[
+        styles.statusBadge,
+        { backgroundColor: getStatusColor(status), transform: [{ scale }] },
+      ]}
+    >
+      <Text style={styles.statusText}>
+        {status.replace('_', ' ').toUpperCase()}
+      </Text>
+    </Animated.View>
+  );
+};
+
+const TasksScreen: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigation = useNavigation();
+  const tasksState = useSelector((state: RootState) => state.tasks);
+  const tasks = tasksState?.tasks ?? [];
+  const isLoading = tasksState?.isLoading ?? false;
+  const error = tasksState?.error ?? null;
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  useEffect(() => {
+    dispatch(fetchTasks());
+  }, [dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(markCompletedTasksSeen());
+    }, [dispatch])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await dispatch(fetchTasks());
+    setRefreshing(false);
+  }, [dispatch]);
+
   const renderTask = ({ item }: { item: Task }) => (
-    <TouchableOpacity style={styles.taskCard}>
+    <TouchableOpacity style={styles.taskCard} activeOpacity={0.85}>
       <View style={styles.taskHeader}>
         <Text style={styles.taskTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status.replace('_', ' ').toUpperCase()}</Text>
-        </View>
+        <StatusBadge status={item.status} />
       </View>
-      
-      {item.description && (
+      {item.description ? (
         <Text style={styles.taskDescription} numberOfLines={2}>
           {item.description}
         </Text>
-      )}
-      
+      ) : null}
       <View style={styles.taskFooter}>
         <Text style={styles.taskDate}>
           {new Date(item.createdAt).toLocaleDateString()}
         </Text>
-        {item.assignedAgent && (
-          <Text style={styles.agentText}>
-            Agent: {item.assignedAgent}
-          </Text>
-        )}
+        {item.assignedAgent ? (
+          <Text style={styles.agentText}>Agent: {item.assignedAgent}</Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
+
+  const showLoading = isLoading && tasks.length === 0 && !error;
+  const showEmpty = !isLoading && tasks.length === 0 && !error;
+  const showList = tasks.length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Tasks</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.getParent()?.navigate('CreateTask' as never)}
+        >
           <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
-      {tasks.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>📋</Text>
-          <Text style={styles.emptyTitle}>No Tasks Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Tap the + button to create your first task
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={tasks}
-          renderItem={renderTask}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.tasksList}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <ConnectionStatus />
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => dispatch(fetchTasks())} />
+        ) : null}
+        {showLoading ? (
+          <LoadingSkeleton lines={5} style={styles.skeleton} />
+        ) : showEmpty ? (
+          <EmptyState
+            emoji="📋"
+            title="No tasks yet"
+            subtitle="Tap the + button to create your first task and assign it to an agent."
+          />
+        ) : showList ? (
+          <View style={styles.tasksList}>
+            {tasks.map((item) => renderTask({ item }))}
+          </View>
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -116,26 +198,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: 'bold',
   },
-  emptyState: {
+  scroll: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
   },
-  emptyStateText: {
-    fontSize: 60,
-    marginBottom: spacing.md,
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing.xl,
   },
-  emptyTitle: {
-    fontSize: typography.title2,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  emptySubtitle: {
-    fontSize: typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  skeleton: {
+    marginTop: spacing.sm,
   },
   tasksList: {
     padding: spacing.md,

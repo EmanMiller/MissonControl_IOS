@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useDispatch } from 'react-redux';
 import MainTabNavigator from './MainTabNavigator';
 import CreateTaskScreen from '../screens/main/CreateTaskScreen';
+import { fetchTasks } from '../store/thunks/taskThunks';
+import { fetchAgents } from '../store/thunks/agentThunks';
+import socketService from '../services/socket';
+import { requestNotificationPermissions } from '../services/notificationsLocal';
+import { AppDispatch } from '../store';
 import { colors } from '../styles/theme';
 
 export type MainStackParamList = {
@@ -12,6 +18,15 @@ export type MainStackParamList = {
 const Stack = createStackNavigator<MainStackParamList>();
 
 const MainStackNavigator: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+
+  useEffect(() => {
+    requestNotificationPermissions();
+    socketService.connect();
+    dispatch(fetchTasks());
+    dispatch(fetchAgents());
+  }, [dispatch]);
+
   return (
     <Stack.Navigator
       screenOptions={{
