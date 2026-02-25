@@ -1,0 +1,169 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { apiService } from '../services/api';
+import { colors, spacing, typography, borderRadius } from '../styles/theme';
+
+interface ConnectionState {
+  serverConnected: boolean;
+  authRequired: boolean;
+  lastChecked: Date | null;
+  message: string;
+}
+
+const ConnectionStatus: React.FC = () => {
+  const [status, setStatus] = useState<ConnectionState>({
+    serverConnected: false,
+    authRequired: false,
+    lastChecked: null,
+    message: 'Checking connection...'
+  });
+  
+  const [isChecking, setIsChecking] = useState(false);
+
+  const checkConnection = async () => {
+    setIsChecking(true);
+    
+    try {
+      // Test basic server connection
+      const connectionTest = await apiService.testConnection();
+      
+      // Test auth requirement
+      const authTest = await apiService.testAuth();
+      
+      setStatus({
+        serverConnected: connectionTest.connected,
+        authRequired: !authTest.success && authTest.message.includes('Authentication required'),
+        lastChecked: new Date(),
+        message: connectionTest.connected 
+          ? (authTest.success ? 'Connected & Authenticated' : 'Connected - Auth Required')
+          : connectionTest.message
+      });
+    } catch (error: any) {
+      setStatus({
+        serverConnected: false,
+        authRequired: false,
+        lastChecked: new Date(),
+        message: `Connection failed: ${error.message}`
+      });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  const getStatusColor = () => {
+    if (!status.serverConnected) return colors.error;
+    if (status.authRequired) return colors.warning;
+    return colors.success;
+  };
+
+  const getStatusIcon = () => {
+    if (isChecking) return '🔄';
+    if (!status.serverConnected) return '❌';
+    if (status.authRequired) return '⚠️';
+    return '✅';
+  };
+
+  return (
+    <TouchableOpacity style={styles.container} onPress={checkConnection} disabled={isChecking}>
+      <View style={[styles.statusCard, { borderColor: getStatusColor() }]}>
+        <View style={styles.statusHeader}>
+          <Text style={styles.statusIcon}>{getStatusIcon()}</Text>
+          <Text style={[styles.statusTitle, { color: getStatusColor() }]}>
+            API Connection
+          </Text>
+          {status.lastChecked && (
+            <Text style={styles.lastChecked}>
+              {status.lastChecked.toLocaleTimeString()}
+            </Text>
+          )}
+        </View>
+        
+        <Text style={styles.statusMessage} numberOfLines={2}>
+          {status.message}
+        </Text>
+        
+        {status.serverConnected && (
+          <View style={styles.details}>
+            <Text style={styles.detailItem}>
+              🌐 Server: {status.serverConnected ? 'Online' : 'Offline'}
+            </Text>
+            <Text style={styles.detailItem}>
+              🔐 Auth: {apiService.isAuthenticated() ? 'Authenticated' : 'Not Authenticated'}
+            </Text>
+          </View>
+        )}
+        
+        <TouchableOpacity 
+          style={[styles.refreshButton, { opacity: isChecking ? 0.5 : 1 }]} 
+          onPress={checkConnection}
+          disabled={isChecking}
+        >
+          <Text style={styles.refreshText}>
+            {isChecking ? 'Checking...' : 'Tap to refresh'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    margin: spacing.md,
+  },
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.medium,
+    padding: spacing.md,
+    borderWidth: 2,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  statusIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
+  },
+  statusTitle: {
+    fontSize: typography.headline,
+    fontWeight: '600',
+    flex: 1,
+  },
+  lastChecked: {
+    fontSize: typography.footnote,
+    color: colors.textSecondary,
+  },
+  statusMessage: {
+    fontSize: typography.subhead,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  details: {
+    marginBottom: spacing.sm,
+  },
+  detailItem: {
+    fontSize: typography.footnote,
+    color: colors.textSecondary,
+    marginVertical: spacing.xs / 2,
+  },
+  refreshButton: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.small,
+  },
+  refreshText: {
+    fontSize: typography.footnote,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+});
+
+export default ConnectionStatus;
