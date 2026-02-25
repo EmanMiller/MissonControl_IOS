@@ -13,7 +13,7 @@ import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Agent } from '../../store/slices/agentSlice';
 
 const AgentsScreen: React.FC = () => {
-  const { agents, isLoading } = useSelector((state: RootState) => state.agents);
+  const { agents } = useSelector((state: RootState) => state.agents);
 
   const getStatusColor = (status: Agent['status']) => {
     switch (status) {
