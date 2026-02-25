@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,24 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
+  ScrollView,
 } from 'react-native';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigation } from '@react-navigation/native';
+import { RootState, AppDispatch } from '../../store';
+import { fetchTasks } from '../../store/thunks/taskThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Task } from '../../store/slices/taskSlice';
+import ConnectionStatus from '../../components/ConnectionStatus';
 
 const TasksScreen: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigation = useNavigation();
   const { tasks } = useSelector((state: RootState) => state.tasks);
+
+  useEffect(() => {
+    dispatch(fetchTasks());
+  }, [dispatch]);
 
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
@@ -58,28 +68,30 @@ const TasksScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Tasks</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.getParent()?.navigate('CreateTask' as never)}
+        >
           <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
-      {tasks.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>📋</Text>
-          <Text style={styles.emptyTitle}>No Tasks Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Tap the + button to create your first task
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={tasks}
-          renderItem={renderTask}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.tasksList}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ConnectionStatus />
+        {tasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>📋</Text>
+            <Text style={styles.emptyTitle}>No Tasks Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the + button to create your first task
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.tasksList}>
+            {tasks.map((item) => renderTask({ item }))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -136,6 +148,9 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  scroll: {
+    flex: 1,
   },
   tasksList: {
     padding: spacing.md,

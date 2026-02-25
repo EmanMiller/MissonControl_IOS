@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,19 @@ import {
   FlatList,
   TouchableOpacity,
 } from 'react-native';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '../../store';
+import { fetchAgents } from '../../store/thunks/agentThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Agent } from '../../store/slices/agentSlice';
 
 const AgentsScreen: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const { agents } = useSelector((state: RootState) => state.agents);
+
+  useEffect(() => {
+    dispatch(fetchAgents());
+  }, [dispatch]);
 
   const getStatusColor = (status: Agent['status']) => {
     switch (status) {

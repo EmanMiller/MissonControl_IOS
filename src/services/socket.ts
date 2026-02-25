@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
-import { updateTask, addTask, setTasks } from '../store/slices/taskSlice';
+import { updateTask, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
 import { updateAgent, setAgents } from '../store/slices/agentSlice';
 
 const SOCKET_URL = 'http://localhost:3001';
@@ -45,9 +45,9 @@ class SocketService {
       store.dispatch(updateTask(task));
     });
 
-    this.socket.on('task:deleted', (taskId) => {
+    this.socket.on('task:deleted', (taskId: string) => {
       console.log('🗑️ Task deleted:', taskId);
-      // Handle task deletion
+      store.dispatch(removeTask(taskId));
     });
 
     // Agent events

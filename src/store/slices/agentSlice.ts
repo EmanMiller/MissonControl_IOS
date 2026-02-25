@@ -1,17 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { Agent } from '../types';
+import { fetchAgents, fetchAgentById } from '../thunks/agentThunks';
 
-export interface Agent {
-  id: string;
-  name: string;
-  status: 'active' | 'idle' | 'offline' | 'busy';
-  type: 'assistant' | 'specialist' | 'manager';
-  currentTask?: string;
-  performance: {
-    tasksCompleted: number;
-    averageTime: number;
-    successRate: number;
-  };
-}
+export type { Agent };
 
 interface AgentState {
   agents: Agent[];
@@ -40,6 +31,8 @@ const agentSlice = createSlice({
       const index = state.agents.findIndex(agent => agent.id === action.payload.id);
       if (index !== -1) {
         state.agents[index] = action.payload;
+      } else {
+        state.agents.push(action.payload);
       }
     },
     setError: (state, action: PayloadAction<string>) => {
@@ -49,6 +42,29 @@ const agentSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchAgents.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchAgents.fulfilled, (state, action) => {
+        state.agents = action.payload ?? [];
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(fetchAgents.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) ?? 'Failed to fetch agents';
+      })
+      .addCase(fetchAgentById.fulfilled, (state, action) => {
+        if (action.payload) {
+          const i = state.agents.findIndex(a => a.id === action.payload!.id);
+          if (i !== -1) state.agents[i] = action.payload;
+          else state.agents.push(action.payload);
+        }
+      });
   },
 });
 

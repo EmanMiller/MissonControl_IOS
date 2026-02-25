@@ -4,7 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import AuthNavigator from './AuthNavigator';
-import MainTabNavigator from './MainTabNavigator';
+import MainStackNavigator from './MainStackNavigator';
 import { darkTheme } from '../styles/theme';
 
 export type RootStackParamList = {
@@ -24,7 +24,7 @@ const AppNavigator: React.FC = () => {
           headerShown: false,
         }}>
         {isAuthenticated ? (
-          <Stack.Screen name="Main" component={MainTabNavigator} />
+          <Stack.Screen name="Main" component={MainStackNavigator} />
         ) : (
           <Stack.Screen name="Auth" component={AuthNavigator} />
         )}
