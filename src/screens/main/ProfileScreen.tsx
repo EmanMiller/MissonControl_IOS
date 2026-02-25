@@ -12,6 +12,36 @@ import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 
+const MenuButton: React.FC<{
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  dangerous?: boolean;
+  disabled?: boolean;
+}> = ({ title, subtitle, onPress, dangerous = false, disabled = false }) => (
+  <TouchableOpacity 
+    style={[styles.menuButton, disabled && styles.disabledButton]}
+    onPress={onPress}
+    disabled={disabled}
+  >
+    <View style={styles.menuButtonContent}>
+      <Text style={[
+        styles.menuButtonTitle, 
+        dangerous && styles.dangerousText,
+        disabled && styles.disabledText
+      ]}>
+        {title}
+      </Text>
+      {subtitle && (
+        <Text style={styles.menuButtonSubtitle}>{subtitle}</Text>
+      )}
+    </View>
+    <Text style={[styles.chevron, disabled && styles.disabledText]}>
+      {disabled ? '🚧' : '>'}
+    </Text>
+  </TouchableOpacity>
+);
+
 const ProfileScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { user, devMode } = useSelector((state: RootState) => state.auth);
@@ -30,36 +60,6 @@ const ProfileScreen: React.FC = () => {
       ]
     );
   };
-
-  const MenuButton: React.FC<{
-    title: string;
-    subtitle?: string;
-    onPress: () => void;
-    dangerous?: boolean;
-    disabled?: boolean;
-  }> = ({ title, subtitle, onPress, dangerous = false, disabled = false }) => (
-    <TouchableOpacity 
-      style={[styles.menuButton, disabled && styles.disabledButton]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View style={styles.menuButtonContent}>
-        <Text style={[
-          styles.menuButtonTitle, 
-          dangerous && styles.dangerousText,
-          disabled && styles.disabledText
-        ]}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={styles.menuButtonSubtitle}>{subtitle}</Text>
-        )}
-      </View>
-      <Text style={[styles.chevron, disabled && styles.disabledText]}>
-        {disabled ? '🚧' : '>'}
-      </Text>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView style={styles.container}>

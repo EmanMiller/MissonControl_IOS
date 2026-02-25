@@ -13,7 +13,7 @@ import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Task } from '../../store/slices/taskSlice';
 
 const TasksScreen: React.FC = () => {
-  const { tasks, isLoading } = useSelector((state: RootState) => state.tasks);
+  const { tasks } = useSelector((state: RootState) => state.tasks);
 
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
