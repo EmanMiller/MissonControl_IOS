@@ -6,6 +6,7 @@ import CreateTaskScreen from '../screens/main/CreateTaskScreen';
 import { fetchTasks } from '../store/thunks/taskThunks';
 import { fetchAgents } from '../store/thunks/agentThunks';
 import socketService from '../services/socket';
+import { requestNotificationPermissions } from '../services/notificationsLocal';
 import { AppDispatch } from '../store';
 import { colors } from '../styles/theme';
 
@@ -20,6 +21,7 @@ const MainStackNavigator: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
+    requestNotificationPermissions();
     socketService.connect();
     dispatch(fetchTasks());
     dispatch(fetchAgents());

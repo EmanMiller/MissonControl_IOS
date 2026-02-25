@@ -106,7 +106,7 @@ const ProfileScreen: React.FC = () => {
             subtitle="Version and app information"
             onPress={() => Alert.alert(
               'Mission Control Mobile',
-              'Version: 1.0.0-dev\nPhase 1: Foundation Setup\n\nBuilt with React Native'
+              'Version: 1.0.0-dev\nPhase 2: Polish & UX\n\nBuilt with React Native'
             )}
           />
           
@@ -123,7 +123,7 @@ const ProfileScreen: React.FC = () => {
             Mission Control Mobile v1.0.0-dev
           </Text>
           <Text style={styles.footerSubtext}>
-            Phase 1: Foundation Setup Complete
+            Phase 2: Polish & UX
           </Text>
         </View>
       </View>

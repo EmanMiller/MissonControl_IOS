@@ -8,12 +8,14 @@ interface TaskState {
   tasks: Task[];
   isLoading: boolean;
   error: string | null;
+  newCompletedCount: number;
 }
 
 const initialState: TaskState = {
   tasks: [],
   isLoading: false,
   error: null,
+  newCompletedCount: 0,
 };
 
 const taskSlice = createSlice({
@@ -29,12 +31,27 @@ const taskSlice = createSlice({
     },
     addTask: (state, action: PayloadAction<Task>) => {
       state.tasks.push(action.payload);
+      if (action.payload.status === 'completed') {
+        state.newCompletedCount += 1;
+      }
     },
     updateTask: (state, action: PayloadAction<Task>) => {
       const index = state.tasks.findIndex(task => task.id === action.payload.id);
       if (index !== -1) {
+        const wasCompleted = state.tasks[index].status === 'completed';
         state.tasks[index] = action.payload;
+        if (action.payload.status === 'completed' && !wasCompleted) {
+          state.newCompletedCount += 1;
+        }
+      } else {
+        state.tasks.push(action.payload);
+        if (action.payload.status === 'completed') {
+          state.newCompletedCount += 1;
+        }
       }
+    },
+    markCompletedTasksSeen: (state) => {
+      state.newCompletedCount = 0;
     },
     removeTask: (state, action: PayloadAction<string>) => {
       state.tasks = state.tasks.filter(task => task.id !== action.payload);
@@ -78,7 +95,13 @@ const taskSlice = createSlice({
       .addCase(updateTaskById.fulfilled, (state, action) => {
         if (action.payload) {
           const i = state.tasks.findIndex(t => t.id === action.payload!.id);
-          if (i !== -1) state.tasks[i] = action.payload;
+          if (i !== -1) {
+            const wasCompleted = state.tasks[i].status === 'completed';
+            state.tasks[i] = action.payload;
+            if (action.payload.status === 'completed' && !wasCompleted) {
+              state.newCompletedCount += 1;
+            }
+          }
         }
       })
       .addCase(deleteTaskById.fulfilled, (state, action) => {
@@ -102,6 +125,7 @@ export const {
   removeTask,
   setError,
   clearError,
+  markCompletedTasksSeen,
 } = taskSlice.actions;
 
 export default taskSlice.reducer;

@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
 import { updateTask, addTask, setTasks, removeTask } from '../store/slices/taskSlice';
 import { updateAgent, setAgents } from '../store/slices/agentSlice';
+import { showTaskCompletedNotification } from './notificationsLocal';
 
 const SOCKET_URL = 'http://localhost:3001';
 
@@ -40,8 +41,10 @@ class SocketService {
       store.dispatch(addTask(task));
     });
 
-    this.socket.on('task:updated', (task) => {
-      console.log('📝 Task updated:', task);
+    this.socket.on('task:updated', (task: { id: string; title?: string; status?: string }) => {
+      if (task?.status === 'completed') {
+        showTaskCompletedNotification(task?.title ?? 'Task');
+      }
       store.dispatch(updateTask(task));
     });
 

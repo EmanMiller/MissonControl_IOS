@@ -1,15 +1,27 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { persistStore, persistReducer } from 'redux-persist';
+import { persistStore, persistReducer, createTransform } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { combineReducers } from '@reduxjs/toolkit';
 import authSlice from './slices/authSlice';
 import taskSlice from './slices/taskSlice';
 import agentSlice from './slices/agentSlice';
 
+const resetTaskBadgeTransform = createTransform(
+  (inbound: unknown) => inbound,
+  (tasksState: { newCompletedCount?: number; [k: string]: unknown }) => {
+    if (tasksState && typeof tasksState.newCompletedCount === 'number') {
+      return { ...tasksState, newCompletedCount: 0 };
+    }
+    return tasksState;
+  },
+  { whitelist: ['tasks'] }
+);
+
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'tasks', 'agents'], // Only persist these reducers
+  whitelist: ['auth', 'tasks', 'agents'],
+  transforms: [resetTaskBadgeTransform],
 };
 
 const rootReducer = combineReducers({

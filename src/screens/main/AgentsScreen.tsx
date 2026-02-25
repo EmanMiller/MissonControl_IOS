@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,30 @@ import {
   SafeAreaView,
   FlatList,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../../store';
 import { fetchAgents } from '../../store/thunks/agentThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { Agent } from '../../store/slices/agentSlice';
+import EmptyState from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
+import LoadingSkeleton from '../../components/LoadingSkeleton';
 
 const AgentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { agents } = useSelector((state: RootState) => state.agents);
+  const { agents, isLoading, error } = useSelector((state: RootState) => state.agents);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     dispatch(fetchAgents());
+  }, [dispatch]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await dispatch(fetchAgents());
+    setRefreshing(false);
   }, [dispatch]);
 
   const getStatusColor = (status: Agent['status']) => {
@@ -40,27 +51,27 @@ const AgentsScreen: React.FC = () => {
   };
 
   const renderAgent = ({ item }: { item: Agent }) => (
-    <TouchableOpacity style={styles.agentCard}>
+    <TouchableOpacity style={styles.agentCard} activeOpacity={0.85}>
       <View style={styles.agentHeader}>
         <View style={styles.agentInfo}>
           <Text style={styles.agentEmoji}>{getAgentEmoji(item.type)}</Text>
           <View style={styles.agentDetails}>
             <Text style={styles.agentName}>{item.name}</Text>
-            <Text style={styles.agentType}>{item.type.charAt(0).toUpperCase() + item.type.slice(1)}</Text>
+            <Text style={styles.agentType}>
+              {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+            </Text>
           </View>
         </View>
         <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
         </View>
       </View>
-
-      {item.currentTask && (
+      {item.currentTask ? (
         <View style={styles.currentTask}>
           <Text style={styles.currentTaskLabel}>Current Task:</Text>
           <Text style={styles.currentTaskText}>{item.currentTask}</Text>
         </View>
-      )}
-
+      ) : null}
       <View style={styles.performanceSection}>
         <View style={styles.performanceItem}>
           <Text style={styles.performanceValue}>{item.performance.tasksCompleted}</Text>
@@ -78,29 +89,51 @@ const AgentsScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const showLoading = isLoading && agents.length === 0 && !error;
+  const showEmpty = !isLoading && agents.length === 0 && !error;
+  const showList = agents.length > 0;
+
+  if (showLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Agents</Text>
+        </View>
+        <LoadingSkeleton lines={6} style={styles.skeleton} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Agents</Text>
       </View>
-
-      {agents.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>🤖</Text>
-          <Text style={styles.emptyTitle}>No Agents Available</Text>
-          <Text style={styles.emptySubtitle}>
-            Agents will appear here once they're connected
-          </Text>
-        </View>
-      ) : (
+      {error ? (
+        <ErrorBanner message={error} onRetry={() => dispatch(fetchAgents())} />
+      ) : null}
+      {showEmpty ? (
+        <EmptyState
+          emoji="🤖"
+          title="No agents available"
+          subtitle="Agents will appear here once they're connected to your OpenClaw instance."
+        />
+      ) : showList ? (
         <FlatList
           data={agents}
           renderItem={renderAgent}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.agentsList}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
         />
-      )}
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -121,29 +154,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  skeleton: {
+    marginTop: spacing.md,
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },
-  emptyStateText: {
-    fontSize: 60,
-    marginBottom: spacing.md,
-  },
-  emptyTitle: {
-    fontSize: typography.title2,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  emptySubtitle: {
-    fontSize: typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
   agentsList: {
     padding: spacing.md,
+    paddingBottom: spacing.xl,
   },
   agentCard: {
     backgroundColor: colors.surface,
