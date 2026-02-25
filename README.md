@@ -9,6 +9,7 @@ This update focused on reliability, local development flow, and noisy runtime wa
 - Added centralized network configuration for API/socket endpoints.
 - Added robust API connectivity checks with clearer connection/auth states.
 - Added local fallback data mode for tasks/agents when API is offline, missing, or unauthorized.
+- Added OAuth login support for Google and GitHub (mobile deep-link callback flow).
 - Reduced repeated network/websocket error spam in runtime logs.
 - Removed duplicate startup fetch calls that were causing extra request noise.
 - Replaced deprecated `SafeAreaView` imports in screens with `react-native-safe-area-context`.
@@ -26,6 +27,30 @@ Default values are generic and safe to commit:
 - `API_PREFIX_RAW = "/api"`
 
 If your OpenClaw host/path differs, update those values locally.
+
+## OAuth Setup
+
+OAuth settings are in:
+
+- `src/config/oauth.ts`
+
+Update these values with your OAuth app details:
+
+- `providers.google.clientId`
+- `providers.github.clientId`
+- `providers.google.startPath` and `providers.github.startPath` (if your backend routes differ)
+- `exchangePath` (if your token exchange route differs)
+
+OAuth callback URI used by the app:
+
+- `missioncontrolmobile://auth/callback`
+
+Mobile deep-link plumbing is already configured in:
+
+- iOS: `ios/MissionControlMobile/Info.plist`
+- Android: `android/app/src/main/AndroidManifest.xml`
+
+Important: keep OAuth client secrets on your backend only (OpenClaw/auth server). Do not store provider secrets in this mobile repo.
 
 ## Prerequisites
 

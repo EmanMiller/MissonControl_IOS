@@ -1,9 +1,13 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { loginWithOAuth } from '../thunks/authThunks';
+import type { OAuthProvider } from '../../config/oauth';
 
 interface User {
   id: string;
   email: string;
   name: string;
+  provider?: OAuthProvider;
+  avatarUrl?: string;
 }
 
 interface AuthState {
@@ -64,6 +68,24 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loginWithOAuth.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loginWithOAuth.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.isAuthenticated = true;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(loginWithOAuth.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) ?? 'OAuth login failed';
+        state.isAuthenticated = false;
+      });
   },
 });
 

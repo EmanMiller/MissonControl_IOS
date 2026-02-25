@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../store/slices/taskSlice';
 import { Agent } from '../store/slices/agentSlice';
 import { API_BASE_URL, API_HEALTH_URLS, OPENCLAW_ORIGIN } from '../config/network';
+import { OAUTH_EXCHANGE_PATH, OAuthProvider } from '../config/oauth';
 import { localData } from './localData';
 
 const AUTH_TOKEN_KEY = 'auth_token';
@@ -323,6 +324,34 @@ class ApiService {
     } catch (error: any) {
       throw error;
     }
+  }
+
+  async setAuthToken(token: string | null): Promise<void> {
+    if (token) {
+      await this.saveAuthToken(token);
+      return;
+    }
+    await this.clearAuthToken();
+  }
+
+  async exchangeOAuthCode(
+    provider: OAuthProvider,
+    code: string,
+    redirectUri: string,
+    state?: string
+  ): Promise<{ token?: string; user?: any }> {
+    const response = await this.client.post(OAUTH_EXCHANGE_PATH, {
+      provider,
+      code,
+      redirectUri,
+      state,
+    });
+
+    if (response.data?.token) {
+      await this.saveAuthToken(response.data.token);
+    }
+
+    return response.data ?? {};
   }
 
   async logout(): Promise<void> {

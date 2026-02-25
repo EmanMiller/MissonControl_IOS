@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,19 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RootState } from '../../store';
+import { RootState, AppDispatch } from '../../store';
 import { devLogin } from '../../store/slices/authSlice';
+import { loginWithOAuth } from '../../store/thunks/authThunks';
+import type { OAuthProvider } from '../../config/oauth';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 
 const LoginScreen: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const auth = useSelector((state: RootState) => state.auth);
   const isLoading = auth?.isLoading ?? false;
   const error = auth?.error ?? null;
   const devMode = auth?.devMode ?? true;
+  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null);
 
   const handleDevLogin = () => {
     if (devMode) {
@@ -27,47 +30,76 @@ const LoginScreen: React.FC = () => {
     }
   };
 
+  const handleOAuthLogin = async (provider: OAuthProvider) => {
+    setPendingProvider(provider);
+    try {
+      await dispatch(loginWithOAuth(provider)).unwrap();
+    } catch {
+      // Error message is already stored in Redux state.
+    } finally {
+      setPendingProvider(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Mission Control</Text>
         <Text style={styles.subtitle}>Mobile Command Center</Text>
-        
+
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>🚀</Text>
         </View>
 
-        {devMode && (
-          <View style={styles.devBadge}>
-            <Text style={styles.devBadgeText}>DEV MODE</Text>
-          </View>
-        )}
+        <Text style={styles.sectionTitle}>Sign in with OAuth</Text>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.devButton]}
-          onPress={handleDevLogin}
+        <TouchableOpacity
+          style={[styles.button, styles.googleButton]}
+          onPress={() => handleOAuthLogin('google')}
           disabled={isLoading}
         >
-          <Text style={styles.buttonText}>
-            {isLoading ? 'Logging in...' : 'Dev Login'}
+          <Text style={styles.googleButtonText}>
+            {isLoading && pendingProvider === 'google'
+              ? 'Connecting to Google...'
+              : 'Continue with Google'}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.disabledButton]}
-          disabled={true}
+        <TouchableOpacity
+          style={[styles.button, styles.githubButton]}
+          onPress={() => handleOAuthLogin('github')}
+          disabled={isLoading}
         >
-          <Text style={styles.disabledButtonText}>
-            OAuth Login (Phase 2)
+          <Text style={styles.githubButtonText}>
+            {isLoading && pendingProvider === 'github'
+              ? 'Connecting to GitHub...'
+              : 'Continue with GitHub'}
           </Text>
         </TouchableOpacity>
+
+        {devMode && (
+          <>
+            <View style={styles.devBadge}>
+              <Text style={styles.devBadgeText}>DEV MODE</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.button, styles.devButton]}
+              onPress={handleDevLogin}
+              disabled={isLoading}
+            >
+              <Text style={styles.buttonText}>
+                {isLoading ? 'Logging in...' : 'Dev Login'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         {error && (
           <Text style={styles.errorText}>{error}</Text>
         )}
 
         <Text style={styles.footerText}>
-          Phase 1: Foundation Setup
+          OAuth callback: missioncontrolmobile://auth/callback
         </Text>
       </View>
     </SafeAreaView>
@@ -99,18 +131,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logoContainer: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   logo: {
     fontSize: 60,
     textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: typography.subhead,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
   },
   devBadge: {
     backgroundColor: colors.warning,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.small,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
   devBadgeText: {
     color: colors.background,
@@ -123,22 +161,34 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.medium,
     alignItems: 'center',
     marginBottom: spacing.md,
+    borderWidth: 1,
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
+  googleButtonText: {
+    color: '#111827',
+    fontSize: typography.headline,
+    fontWeight: '600',
+  },
+  githubButton: {
+    backgroundColor: '#111827',
+    borderColor: '#111827',
+  },
+  githubButtonText: {
+    color: '#F9FAFB',
+    fontSize: typography.headline,
+    fontWeight: '600',
   },
   devButton: {
     backgroundColor: colors.primary,
-  },
-  disabledButton: {
-    backgroundColor: colors.border,
+    borderColor: colors.primary,
   },
   buttonText: {
     fontSize: typography.headline,
     fontWeight: '600',
     color: colors.text,
-  },
-  disabledButtonText: {
-    fontSize: typography.headline,
-    fontWeight: '600',
-    color: colors.textSecondary,
   },
   errorText: {
     color: colors.error,
@@ -150,7 +200,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.footnote,
     textAlign: 'center',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
 });
 
