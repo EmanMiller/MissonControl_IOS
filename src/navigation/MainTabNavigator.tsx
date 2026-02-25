@@ -16,7 +16,7 @@ export type MainTabParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator: React.FC = () => {
-  const newCompletedCount = useSelector((state: RootState) => state.tasks.newCompletedCount);
+  const newCompletedCount = useSelector((state: RootState) => state.tasks?.newCompletedCount ?? 0);
 
   return (
     <Tab.Navigator
