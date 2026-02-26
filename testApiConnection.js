@@ -7,7 +7,7 @@
 
 const axios = require('axios');
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = process.env.OPENCLAW_URL || 'https://your-openclaw-host:3001';
 const API_BASE = `${BASE_URL}/api`;
 
 async function testEndpoint(url, method = 'GET', data = null) {
@@ -119,7 +119,7 @@ async function main() {
   
   const serverDown = results.some(r => r.error && r.error.includes('ECONNREFUSED'));
   if (serverDown) {
-    console.log('   - Start the Mission Control backend server on localhost:3001');
+    console.log('   - Start the Mission Control backend server and set OPENCLAW_URL');
     return;
   }
   

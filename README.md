@@ -23,7 +23,7 @@ Network settings are in:
 
 Default values are generic and safe to commit:
 
-- `OPENCLAW_ORIGIN_RAW = "http://localhost:3001/"`
+- `OPENCLAW_ORIGIN_RAW = "https://your-openclaw-host:3001/"`
 - `API_PREFIX_RAW = "/api"`
 
 If your OpenClaw host/path differs, update those values locally.

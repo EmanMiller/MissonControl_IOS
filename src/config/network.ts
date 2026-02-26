@@ -1,4 +1,4 @@
-const OPENCLAW_ORIGIN_RAW = 'http://localhost:3001/';
+const OPENCLAW_ORIGIN_RAW = 'https://your-openclaw-host:3001/';
 const API_PREFIX_RAW = '/api';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
