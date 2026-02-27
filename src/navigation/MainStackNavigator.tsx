@@ -3,7 +3,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import MainTabNavigator from './MainTabNavigator';
 import CreateTaskScreen from '../screens/main/CreateTaskScreen';
 import socketService from '../services/socket';
-import { requestNotificationPermissions } from '../services/notificationsLocal';
 import { colors } from '../styles/theme';
 
 export type MainStackParamList = {
@@ -15,7 +14,6 @@ const Stack = createStackNavigator<MainStackParamList>();
 
 const MainStackNavigator: React.FC = () => {
   useEffect(() => {
-    requestNotificationPermissions();
     socketService.connect();
   }, []);
 

@@ -1,14 +1,44 @@
-import { configureStore } from '@reduxjs/toolkit';
-import { persistStore, persistReducer, createTransform } from 'redux-persist';
+import { combineReducers, configureStore } from '@reduxjs/toolkit';
+import {
+  createTransform,
+  persistReducer,
+  persistStore,
+  type PersistConfig,
+} from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { combineReducers } from '@reduxjs/toolkit';
 import authSlice from './slices/authSlice';
 import taskSlice from './slices/taskSlice';
 import agentSlice from './slices/agentSlice';
+import appSlice from './slices/appSlice';
 
-const resetTaskBadgeTransform = createTransform(
-  (inbound: unknown) => inbound,
-  (tasksState: { newCompletedCount?: number; [k: string]: unknown }) => {
+const rootReducer = combineReducers({
+  auth: authSlice,
+  tasks: taskSlice,
+  agents: agentSlice,
+  app: appSlice,
+});
+
+type RootReducerState = ReturnType<typeof rootReducer>;
+
+const resetAuthTransientTransform = createTransform<any, any, RootReducerState>(
+  inbound => inbound,
+  authState => {
+    if (!authState) {
+      return authState;
+    }
+
+    return {
+      ...authState,
+      isLoading: false,
+      error: null,
+    };
+  },
+  { whitelist: ['auth'] }
+);
+
+const resetTaskBadgeTransform = createTransform<any, any, RootReducerState>(
+  inbound => inbound,
+  tasksState => {
     if (tasksState && typeof tasksState.newCompletedCount === 'number') {
       return { ...tasksState, newCompletedCount: 0 };
     }
@@ -17,18 +47,12 @@ const resetTaskBadgeTransform = createTransform(
   { whitelist: ['tasks'] }
 );
 
-const persistConfig = {
+const persistConfig: PersistConfig<RootReducerState> = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'tasks', 'agents'],
-  transforms: [resetTaskBadgeTransform],
+  whitelist: ['auth', 'tasks', 'agents', 'app'],
+  transforms: [resetAuthTransientTransform, resetTaskBadgeTransform],
 };
-
-const rootReducer = combineReducers({
-  auth: authSlice,
-  tasks: taskSlice,
-  agents: agentSlice,
-});
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 

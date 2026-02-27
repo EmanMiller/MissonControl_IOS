@@ -3,10 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "gen:env": "node scripts/generate-env.js",
+    "preandroid": "npm run gen:env",
     "android": "react-native run-android",
+    "preios": "npm run gen:env",
     "ios": "react-native run-ios",
+    "prelint": "npm run gen:env",
     "lint": "eslint .",
+    "prestart": "npm run gen:env",
     "start": "react-native start",
+    "pretest": "npm run gen:env",
     "test": "jest"
   },
   "dependencies": {

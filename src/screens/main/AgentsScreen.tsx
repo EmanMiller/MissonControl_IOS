@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { RootState, AppDispatch } from '../../store';
 import { fetchAgents } from '../../store/thunks/agentThunks';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
@@ -16,6 +17,7 @@ import EmptyState from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiService } from '../../services/api';
 
 const AgentsScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -24,16 +26,42 @@ const AgentsScreen: React.FC = () => {
   const isLoading = agentsState?.isLoading ?? false;
   const error = agentsState?.error ?? null;
   const [refreshing, setRefreshing] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [connectionLabel, setConnectionLabel] = useState('Checking...');
 
   useEffect(() => {
     dispatch(fetchAgents());
   }, [dispatch]);
 
+  const refreshConnection = useCallback(async () => {
+    const result = await apiService.testConnection();
+    const offline = !result.connected || apiService.isUsingLocalData();
+    setIsOffline(offline);
+    setConnectionLabel(result.connected ? (offline ? 'Offline Cache' : 'Connected') : 'Disconnected');
+  }, []);
+
+  useEffect(() => {
+    refreshConnection().catch(() => {
+      setIsOffline(true);
+      setConnectionLabel('Disconnected');
+    });
+
+    const timer = setInterval(() => {
+      refreshConnection().catch(() => {
+        setIsOffline(true);
+        setConnectionLabel('Disconnected');
+      });
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [refreshConnection]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await dispatch(fetchAgents());
+    await refreshConnection();
     setRefreshing(false);
-  }, [dispatch]);
+  }, [dispatch, refreshConnection]);
 
   const getStatusColor = (status: Agent['status']) => {
     switch (status) {
@@ -101,7 +129,14 @@ const AgentsScreen: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Agents</Text>
+          <Text style={styles.connectionText}>{connectionLabel}</Text>
         </View>
+        {isOffline ? (
+          <View style={styles.offlineBanner}>
+            <Icon name="cloud-offline-outline" size={16} color={colors.warning} />
+            <Text style={styles.offlineBannerText}>Showing cached data while offline.</Text>
+          </View>
+        ) : null}
         <LoadingSkeleton lines={6} style={styles.skeleton} />
       </SafeAreaView>
     );
@@ -111,7 +146,14 @@ const AgentsScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Agents</Text>
+        <Text style={styles.connectionText}>{connectionLabel}</Text>
       </View>
+      {isOffline ? (
+        <View style={styles.offlineBanner}>
+          <Icon name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Text style={styles.offlineBannerText}>Showing cached data while offline.</Text>
+        </View>
+      ) : null}
       {error ? (
         <ErrorBanner message={error} onRetry={() => dispatch(fetchAgents())} />
       ) : null}
@@ -156,6 +198,26 @@ const styles = StyleSheet.create({
     fontSize: typography.title1,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  connectionText: {
+    fontSize: typography.caption1,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: `${colors.warning}20`,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.warning}40`,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  offlineBannerText: {
+    color: colors.warning,
+    fontSize: typography.footnote,
+    fontWeight: '600',
   },
   skeleton: {
     marginTop: spacing.md,

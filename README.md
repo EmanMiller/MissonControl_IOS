@@ -2,44 +2,37 @@
 
 MissionControlMobile is a React Native 0.84.0 (TypeScript) app for managing AI agents and tasks.
 
-## What Changed
+## Current Highlights
 
-This update focused on reliability, local development flow, and noisy runtime warnings.
-
-- Added centralized network configuration for API/socket endpoints.
-- Added robust API connectivity checks with clearer connection/auth states.
-- Added local fallback data mode for tasks/agents when API is offline, missing, or unauthorized.
-- Added OAuth login support for Google and GitHub (mobile deep-link callback flow).
-- Reduced repeated network/websocket error spam in runtime logs.
-- Removed duplicate startup fetch calls that were causing extra request noise.
-- Replaced deprecated `SafeAreaView` imports in screens with `react-native-safe-area-context`.
-- Improved connection status UI to show whether app is using OpenClaw API or local fallback mode.
+- Intro walkthrough shown once on first launch.
+- Auth supports email/password, Google OAuth, GitHub OAuth, remember-me, and biometric unlock for returning users.
+- OpenClaw token connection onboarding flow (test, validating, success/failure with retry).
+- Token storage uses iOS Keychain via native module (not AsyncStorage).
+- Offline-aware tasks experience with pull-to-refresh, filters, swipe actions, status pills, and fallback cache mode.
+- Global error boundary and inactivity auto-logout.
 
 ## Endpoint Configuration
 
-Network settings are in:
+Network and OAuth settings come from `.env` and are generated into `src/config/env.generated.ts`.
 
-- `src/config/network.ts`
+Use `.env` (local only, ignored by git):
 
-Default values are generic and safe to commit:
+```sh
+GOOGLE_CLIENT_ID=your-google-client-id
+GITHUB_CLIENT_ID=your-github-client-id
+OPENCLAW_ORIGIN=http://localhost:3001
+OAUTH_BACKEND_ORIGIN=http://localhost:3001
+```
 
-- `OPENCLAW_ORIGIN_RAW = "https://your-openclaw-host:3001/"`
-- `API_PREFIX_RAW = "/api"`
+Then run:
 
-If your OpenClaw host/path differs, update those values locally.
+```sh
+npm run gen:env
+```
 
 ## OAuth Setup
 
-OAuth settings are in:
-
-- `src/config/oauth.ts`
-
-Update these values with your OAuth app details:
-
-- `providers.google.clientId`
-- `providers.github.clientId`
-- `providers.google.startPath` and `providers.github.startPath` (if your backend routes differ)
-- `exchangePath` (if your token exchange route differs)
+OAuth runtime config is in `src/config/oauth.ts` and generated values come from `.env`.
 
 OAuth callback URI used by the app:
 

@@ -1,10 +1,10 @@
 import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task } from '../store/slices/taskSlice';
 import { Agent } from '../store/slices/agentSlice';
 import { API_BASE_URL, API_HEALTH_URLS, OPENCLAW_ORIGIN } from '../config/network';
-import { OAUTH_EXCHANGE_PATH, OAuthProvider } from '../config/oauth';
+import { OAUTH_BACKEND_BASE_URL, OAUTH_EXCHANGE_PATH, OAuthProvider } from '../config/oauth';
 import { localData } from './localData';
+import { secureStorage } from './secureStorage';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
@@ -104,7 +104,7 @@ class ApiService {
 
   private async loadAuthToken() {
     try {
-      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+      const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
       if (token) {
         this.authToken = token;
       }
@@ -115,7 +115,7 @@ class ApiService {
 
   private async saveAuthToken(token: string) {
     try {
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
       this.authToken = token;
     } catch (error) {
       console.error('Failed to save auth token:', error);
@@ -124,7 +124,7 @@ class ApiService {
 
   private async clearAuthToken() {
     try {
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      await secureStorage.removeItem(AUTH_TOKEN_KEY);
       this.authToken = null;
     } catch (error) {
       console.error('Failed to clear auth token:', error);
@@ -326,6 +326,46 @@ class ApiService {
     }
   }
 
+  async createAccount(input: {
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<{ token?: string; user?: any }> {
+    const payload = {
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      username: input.email,
+    };
+
+    try {
+      const response = await this.client.post('/auth/register', payload);
+      if (response.data?.token) {
+        await this.saveAuthToken(response.data.token);
+      }
+
+      return response.data ?? {};
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (this.isNetworkError(error) || status === 404) {
+        const localUser = {
+          id: `local-user-${Date.now()}`,
+          name: input.name,
+          email: input.email,
+          provider: 'credentials' as const,
+        };
+        this.setMode('local', 'Register endpoint unavailable. Created a local account.');
+        return { user: localUser };
+      }
+
+      const message =
+        (error?.response?.data as { message?: string } | undefined)?.message ||
+        error?.message ||
+        'Failed to create account';
+      throw new Error(message);
+    }
+  }
+
   async setAuthToken(token: string | null): Promise<void> {
     if (token) {
       await this.saveAuthToken(token);
@@ -334,17 +374,46 @@ class ApiService {
     await this.clearAuthToken();
   }
 
+  async hasStoredAuthToken(): Promise<boolean> {
+    const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
+    return !!token;
+  }
+
+  async restoreStoredAuthToken(): Promise<string | null> {
+    const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
+    this.authToken = token;
+    return token;
+  }
+
+  async setRememberMe(remember: boolean): Promise<void> {
+    if (!this.authToken) {
+      return;
+    }
+
+    if (remember) {
+      await secureStorage.setItem(AUTH_TOKEN_KEY, this.authToken);
+      return;
+    }
+
+    await secureStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+
   async exchangeOAuthCode(
     provider: OAuthProvider,
     code: string,
     redirectUri: string,
     state?: string
   ): Promise<{ token?: string; user?: any }> {
-    const response = await this.client.post(OAUTH_EXCHANGE_PATH, {
+    const response = await axios.post(`${OAUTH_BACKEND_BASE_URL}${OAUTH_EXCHANGE_PATH}`, {
       provider,
       code,
       redirectUri,
       state,
+    }, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
 
     if (response.data?.token) {
@@ -352,6 +421,19 @@ class ApiService {
     }
 
     return response.data ?? {};
+  }
+
+  async getCurrentUser(): Promise<any | null> {
+    try {
+      const response = await this.client.get('/auth/me');
+      return response.data ?? null;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 404 || status === 401 || status === 403 || this.isNetworkError(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {

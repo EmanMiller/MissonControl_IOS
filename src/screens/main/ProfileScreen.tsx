@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../../store';
-import { logout } from '../../store/slices/authSlice';
-import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '../../store';
+import { logout } from '../../store/slices/authSlice';
+import { resetOpenClawSetup } from '../../store/slices/appSlice';
+import { colors, spacing, typography, borderRadius } from '../../styles/theme';
+import haptics from '../../services/haptics';
 
 const MenuButton: React.FC<{
   title: string;
@@ -19,48 +22,49 @@ const MenuButton: React.FC<{
   dangerous?: boolean;
   disabled?: boolean;
 }> = ({ title, subtitle, onPress, dangerous = false, disabled = false }) => (
-  <TouchableOpacity 
+  <TouchableOpacity
     style={[styles.menuButton, disabled && styles.disabledButton]}
     onPress={onPress}
     disabled={disabled}
   >
     <View style={styles.menuButtonContent}>
-      <Text style={[
-        styles.menuButtonTitle, 
-        dangerous && styles.dangerousText,
-        disabled && styles.disabledText
-      ]}>
+      <Text
+        style={[
+          styles.menuButtonTitle,
+          dangerous && styles.dangerousText,
+          disabled && styles.disabledText,
+        ]}
+      >
         {title}
       </Text>
-      {subtitle && (
-        <Text style={styles.menuButtonSubtitle}>{subtitle}</Text>
-      )}
+      {subtitle ? <Text style={styles.menuButtonSubtitle}>{subtitle}</Text> : null}
     </View>
-    <Text style={[styles.chevron, disabled && styles.disabledText]}>
-      {disabled ? '🚧' : '>'}
-    </Text>
+    <Icon
+      name={disabled ? 'construct-outline' : 'chevron-forward'}
+      size={20}
+      color={colors.textSecondary}
+    />
   </TouchableOpacity>
 );
 
 const ProfileScreen: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const auth = useSelector((state: RootState) => state.auth);
   const user = auth?.user ?? null;
-  const devMode = auth?.devMode ?? true;
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: () => dispatch(logout())
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: () => {
+          haptics.impactLight();
+          dispatch(logout());
+          dispatch(resetOpenClawSetup());
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
@@ -70,63 +74,41 @@ const ProfileScreen: React.FC = () => {
       </View>
 
       <View style={styles.content}>
-        {/* User Info Section */}
         <View style={styles.userSection}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </Text>
+            <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
           </View>
           <Text style={styles.userName}>{user?.name || 'Unknown User'}</Text>
           <Text style={styles.userEmail}>{user?.email || 'No email'}</Text>
-          
-          {devMode && (
-            <View style={styles.devBadge}>
-              <Text style={styles.devBadgeText}>DEV MODE</Text>
-            </View>
-          )}
         </View>
 
-        {/* Menu Section */}
         <View style={styles.menuSection}>
           <MenuButton
             title="Notifications"
             subtitle="Manage push notifications"
-            onPress={() => Alert.alert('Coming Soon', 'Notification settings will be available in Phase 2')}
-            disabled={true}
+            onPress={() => Alert.alert('Coming Soon', 'Notification settings are coming soon.')}
+            disabled
           />
-          
+
           <MenuButton
             title="Preferences"
             subtitle="App settings and preferences"
-            onPress={() => Alert.alert('Coming Soon', 'Preferences will be available in Phase 2')}
-            disabled={true}
+            onPress={() => Alert.alert('Coming Soon', 'Preferences are coming soon.')}
+            disabled
           />
-          
+
           <MenuButton
             title="About"
             subtitle="Version and app information"
-            onPress={() => Alert.alert(
-              'Mission Control Mobile',
-              'Version: 1.0.0-dev\nPhase 2: Polish & UX\n\nBuilt with React Native'
-            )}
+            onPress={() =>
+              Alert.alert(
+                'Mission Control Mobile',
+                'Version: 1.0.0\nBuilt with React Native'
+              )
+            }
           />
-          
-          <MenuButton
-            title="Logout"
-            onPress={handleLogout}
-            dangerous={true}
-          />
-        </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Mission Control Mobile v1.0.0-dev
-          </Text>
-          <Text style={styles.footerSubtext}>
-            Phase 2: Polish & UX
-          </Text>
+          <MenuButton title="Logout" onPress={handleLogout} dangerous />
         </View>
       </View>
     </SafeAreaView>
@@ -182,17 +164,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.md,
   },
-  devBadge: {
-    backgroundColor: colors.warning,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.small,
-  },
-  devBadgeText: {
-    color: colors.background,
-    fontSize: typography.caption1,
-    fontWeight: 'bold',
-  },
   menuSection: {
     flex: 1,
   },
@@ -226,24 +197,6 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   disabledText: {
-    color: colors.textSecondary,
-  },
-  chevron: {
-    fontSize: typography.title3,
-    color: colors.textSecondary,
-    fontWeight: 'bold',
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  footerText: {
-    fontSize: typography.footnote,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs / 2,
-  },
-  footerSubtext: {
-    fontSize: typography.caption1,
     color: colors.textSecondary,
   },
 });

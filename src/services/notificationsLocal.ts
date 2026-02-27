@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 let PushNotificationIOS: {
   requestPermissions: () => Promise<{ alert: boolean; badge: boolean; sound: boolean }>;
   addNotificationRequest: (request: { id: string; title?: string; body?: string }) => void;
+  setApplicationIconBadgeNumber: (count: number) => void;
 } | null = null;
 
 if (Platform.OS === 'ios') {
@@ -37,5 +38,14 @@ export function showTaskCompletedNotification(taskTitle: string): void {
     });
   } catch {
     // Silently ignore if permissions denied or API fails
+  }
+}
+
+export function setAppBadgeCount(count: number): void {
+  if (Platform.OS !== 'ios' || !PushNotificationIOS) return;
+  try {
+    PushNotificationIOS.setApplicationIconBadgeNumber(Math.max(0, count));
+  } catch {
+    // Ignore badge update failures.
   }
 }

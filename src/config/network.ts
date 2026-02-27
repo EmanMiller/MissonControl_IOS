@@ -1,4 +1,6 @@
-const OPENCLAW_ORIGIN_RAW = 'https://your-openclaw-host:3001/';
+import { OPENCLAW_ORIGIN as OPENCLAW_ORIGIN_ENV } from './env.generated';
+
+const OPENCLAW_ORIGIN_RAW = OPENCLAW_ORIGIN_ENV;
 const API_PREFIX_RAW = '/api';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');

@@ -1,7 +1,7 @@
 import { Linking, Platform } from 'react-native';
-import { API_BASE_URL } from '../config/network';
 import {
   isOAuthClientIdConfigured,
+  OAUTH_BACKEND_BASE_URL,
   OAUTH_CONFIG,
   OAUTH_REDIRECT_URI,
   OAuthProvider,
@@ -45,7 +45,7 @@ class OAuthService {
 
   private buildStartUrl(provider: OAuthProvider, state: string) {
     const providerConfig = OAUTH_CONFIG.providers[provider];
-    const startUrl = new URL(`${API_BASE_URL}${providerConfig.startPath}`);
+    const startUrl = new URL(`${OAUTH_BACKEND_BASE_URL}${providerConfig.startPath}`);
     startUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
     startUrl.searchParams.set('state', state);
     startUrl.searchParams.set('platform', Platform.OS);
@@ -147,6 +147,49 @@ class OAuthService {
     };
   }
 
+  private async resolveGoogleUserFromAccessToken(
+    accessToken: string
+  ): Promise<OAuthUser | null> {
+    try {
+      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = await response.json();
+      if (!payload?.sub || !payload?.email) {
+        return null;
+      }
+
+      return {
+        id: String(payload.sub),
+        email: String(payload.email),
+        name: String(payload.name ?? payload.email),
+        provider: 'google',
+        avatarUrl:
+          typeof payload.picture === 'string'
+            ? payload.picture
+            : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async resolveUserFromServer(provider: OAuthProvider): Promise<OAuthUser | null> {
+    const user = await apiService.getCurrentUser();
+    if (!user?.id || !user?.email) {
+      return null;
+    }
+
+    return this.normalizeUser(user, provider);
+  }
+
   async signIn(provider: OAuthProvider): Promise<OAuthResult> {
     const state = this.createState();
     const authUrl = this.buildStartUrl(provider, state);
@@ -174,14 +217,37 @@ class OAuthService {
       if (callbackUser) {
         return { user: callbackUser };
       }
-      return {
-        user: {
-          id: `${provider}-user`,
-          email: `${provider}@oauth.local`,
-          name: `${OAUTH_CONFIG.providers[provider].label} User`,
-          provider,
-        },
-      };
+
+      if (provider === 'google') {
+        const googleUser = await this.resolveGoogleUserFromAccessToken(callbackToken);
+        if (googleUser) {
+          return { user: googleUser };
+        }
+      }
+
+      const serverUser = await this.resolveUserFromServer(provider);
+      if (serverUser) {
+        return { user: serverUser };
+      }
+
+      throw new Error(
+        `${OAUTH_CONFIG.providers[provider].label} sign-in completed, but no user profile was returned.`
+      );
+    }
+
+    const callbackUser = this.parseUserFromCallback(callbackParams, provider);
+    if (callbackUser) {
+      return { user: callbackUser };
+    }
+
+    if (provider === 'google') {
+      const accessToken = callbackParams.get('access_token');
+      if (accessToken) {
+        const googleUser = await this.resolveGoogleUserFromAccessToken(accessToken);
+        if (googleUser) {
+          return { user: googleUser };
+        }
+      }
     }
 
     const code = callbackParams.get('code');
@@ -196,8 +262,19 @@ class OAuthService {
       state
     );
 
-    const user = this.normalizeUser(exchangeResponse?.user, provider);
-    return { user };
+    if (exchangeResponse?.user?.id && exchangeResponse?.user?.email) {
+      const user = this.normalizeUser(exchangeResponse.user, provider);
+      return { user };
+    }
+
+    const serverUser = await this.resolveUserFromServer(provider);
+    if (serverUser) {
+      return { user: serverUser };
+    }
+
+    throw new Error(
+      `${OAUTH_CONFIG.providers[provider].label} sign-in succeeded, but account data is missing.`
+    );
   }
 }
 

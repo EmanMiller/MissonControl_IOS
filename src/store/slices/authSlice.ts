@@ -1,12 +1,17 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { loginWithOAuth } from '../thunks/authThunks';
+import {
+  createAccountWithCredentials,
+  loginWithBiometrics,
+  loginWithCredentials,
+  loginWithOAuth,
+} from '../thunks/authThunks';
 import type { OAuthProvider } from '../../config/oauth';
 
 interface User {
   id: string;
   email: string;
   name: string;
-  provider?: OAuthProvider;
+  provider?: OAuthProvider | 'credentials';
   avatarUrl?: string;
 }
 
@@ -15,7 +20,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  devMode: boolean;
 }
 
 const initialState: AuthState = {
@@ -23,7 +27,6 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
-  devMode: __DEV__, // Enable dev mode for Phase 1
 };
 
 const authSlice = createSlice({
@@ -50,22 +53,13 @@ const authSlice = createSlice({
       state.user = null;
       state.isAuthenticated = false;
       state.error = null;
-    },
-    setDevMode: (state, action: PayloadAction<boolean>) => {
-      state.devMode = action.payload;
-    },
-    devLogin: (state) => {
-      // Dev mode quick login for Phase 1
-      state.user = {
-        id: 'dev-user-001',
-        email: 'dev@missioncontrol.app',
-        name: 'Dev User',
-      };
-      state.isAuthenticated = true;
       state.isLoading = false;
-      state.error = null;
     },
     clearError: (state) => {
+      state.error = null;
+    },
+    resetTransientState: (state) => {
+      state.isLoading = false;
       state.error = null;
     },
   },
@@ -85,6 +79,51 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = (action.payload as string) ?? 'OAuth login failed';
         state.isAuthenticated = false;
+      })
+      .addCase(createAccountWithCredentials.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(createAccountWithCredentials.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.isAuthenticated = true;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(createAccountWithCredentials.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) ?? 'Account creation failed';
+        state.isAuthenticated = false;
+      })
+      .addCase(loginWithCredentials.pending, state => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loginWithCredentials.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.isAuthenticated = true;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(loginWithCredentials.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) ?? 'Login failed';
+        state.isAuthenticated = false;
+      })
+      .addCase(loginWithBiometrics.pending, state => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loginWithBiometrics.fulfilled, (state, action) => {
+        state.user = action.payload;
+        state.isAuthenticated = true;
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(loginWithBiometrics.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) ?? 'Biometric login failed';
+        state.isAuthenticated = false;
       });
   },
 });
@@ -94,9 +133,8 @@ export const {
   loginSuccess,
   loginFailure,
   logout,
-  setDevMode,
-  devLogin,
   clearError,
+  resetTransientState,
 } = authSlice.actions;
 
 export default authSlice.reducer;
