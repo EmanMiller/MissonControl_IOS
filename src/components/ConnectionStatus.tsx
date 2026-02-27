@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { apiService } from '../services/api';
 import { colors, spacing, typography, borderRadius } from '../styles/theme';
+import haptics from '../services/haptics';
 
 interface ConnectionState {
   serverConnected: boolean;
@@ -23,6 +25,7 @@ const ConnectionStatus: React.FC = () => {
   const [isChecking, setIsChecking] = useState(false);
 
   const checkConnection = async () => {
+    haptics.impactLight();
     setIsChecking(true);
 
     try {
@@ -84,17 +87,22 @@ const ConnectionStatus: React.FC = () => {
   };
 
   const getStatusIcon = () => {
-    if (isChecking) return '🔄';
-    if (!status.serverConnected) return '❌';
-    if (status.authRequired) return '⚠️';
-    return '✅';
+    if (isChecking) return 'sync-outline';
+    if (!status.serverConnected) return 'cloud-offline-outline';
+    if (status.authRequired) return 'alert-circle-outline';
+    return 'checkmark-circle-outline';
   };
 
   return (
     <TouchableOpacity style={styles.container} onPress={checkConnection} disabled={isChecking}>
       <View style={[styles.statusCard, { borderColor: getStatusColor() }]}>
         <View style={styles.statusHeader}>
-          <Text style={styles.statusIcon}>{getStatusIcon()}</Text>
+          <Icon
+            name={getStatusIcon()}
+            size={20}
+            color={getStatusColor()}
+            style={styles.statusIcon}
+          />
           <Text style={[styles.statusTitle, { color: getStatusColor() }]}>
             API Connection
           </Text>
@@ -112,13 +120,13 @@ const ConnectionStatus: React.FC = () => {
         {status.serverConnected && (
           <View style={styles.details}>
             <Text style={styles.detailItem}>
-              🌐 Server: {status.serverConnected ? 'Online' : 'Offline'}
+              Server: {status.serverConnected ? 'Online' : 'Offline'}
             </Text>
             <Text style={styles.detailItem}>
-              🔐 Auth: {apiService.isAuthenticated() ? 'Authenticated' : 'Not Authenticated'}
+              Auth: {apiService.isAuthenticated() ? 'Authenticated' : 'Not Authenticated'}
             </Text>
             <Text style={styles.detailItem}>
-              💾 Data Mode: {status.usingLocalData ? 'Local Fallback' : 'OpenClaw API'}
+              Data Mode: {status.usingLocalData ? 'Local Fallback' : 'OpenClaw API'}
             </Text>
           </View>
         )}
@@ -153,7 +161,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   statusIcon: {
-    fontSize: 20,
     marginRight: spacing.sm,
   },
   statusTitle: {

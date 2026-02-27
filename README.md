@@ -34,6 +34,12 @@ npm run gen:env
 
 OAuth runtime config is in `src/config/oauth.ts` and generated values come from `.env`.
 
+Default OAuth backend routes expected by the app:
+
+- `/api/auth/oauth/google/start`
+- `/api/auth/oauth/github/start`
+- `/api/auth/oauth/mobile/exchange`
+
 OAuth callback URI used by the app:
 
 - `missioncontrolmobile://auth/callback`

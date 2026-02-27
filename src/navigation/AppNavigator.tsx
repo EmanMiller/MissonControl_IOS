@@ -8,6 +8,7 @@ import MainStackNavigator from './MainStackNavigator';
 import OpenClawSetupNavigator from './OpenClawSetupNavigator';
 import IntroWalkthroughScreen from '../screens/onboarding/IntroWalkthroughScreen';
 import { darkTheme } from '../styles/theme';
+import { withScreenBoundary } from '../components/withScreenBoundary';
 
 export type RootStackParamList = {
   Intro: undefined;
@@ -17,6 +18,10 @@ export type RootStackParamList = {
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
+const IntroWithBoundary = withScreenBoundary(IntroWalkthroughScreen);
+const AuthWithBoundary = withScreenBoundary(AuthNavigator);
+const OpenClawSetupWithBoundary = withScreenBoundary(OpenClawSetupNavigator);
+const MainWithBoundary = withScreenBoundary(MainStackNavigator);
 
 const AppNavigator: React.FC = () => {
   const isAuthenticated = useSelector((state: RootState) => state.auth?.isAuthenticated ?? false);
@@ -32,13 +37,13 @@ const AppNavigator: React.FC = () => {
           headerShown: false,
         }}>
         {!hasSeenIntro ? (
-          <Stack.Screen name="Intro" component={IntroWalkthroughScreen} />
+          <Stack.Screen name="Intro" component={IntroWithBoundary} />
         ) : !isAuthenticated ? (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+          <Stack.Screen name="Auth" component={AuthWithBoundary} />
         ) : !hasCompletedOpenClawSetup ? (
-          <Stack.Screen name="OpenClawSetup" component={OpenClawSetupNavigator} />
+          <Stack.Screen name="OpenClawSetup" component={OpenClawSetupWithBoundary} />
         ) : (
-          <Stack.Screen name="Main" component={MainStackNavigator} />
+          <Stack.Screen name="Main" component={MainWithBoundary} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

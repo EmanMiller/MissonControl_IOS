@@ -11,12 +11,12 @@ type ProviderConfig = {
 const PROVIDER_CONFIG: Record<OAuthProvider, ProviderConfig> = {
   google: {
     label: 'Google',
-    startPath: '/auth/oauth/google/start',
+    startPath: '/api/auth/oauth/google/start',
     clientId: GOOGLE_CLIENT_ID,
   },
   github: {
     label: 'GitHub',
-    startPath: '/auth/oauth/github/start',
+    startPath: '/api/auth/oauth/github/start',
     clientId: GITHUB_CLIENT_ID,
   },
 };
@@ -26,7 +26,7 @@ export const OAUTH_CONFIG = {
   redirectHost: 'auth',
   redirectPath: 'callback',
   timeoutMs: 120000,
-  exchangePath: '/auth/oauth/mobile/exchange',
+  exchangePath: '/api/auth/oauth/mobile/exchange',
   providers: PROVIDER_CONFIG,
 };
 

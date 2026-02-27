@@ -23,7 +23,6 @@ import EmptyState from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import { apiService } from '../../services/api';
-import { showTaskCompletedNotification } from '../../services/notificationsLocal';
 import haptics from '../../services/haptics';
 
 type TaskFilter = 'all' | 'pending' | 'in_progress' | 'completed';
@@ -146,7 +145,7 @@ const TasksScreen: React.FC = () => {
 
   const handleQuickComplete = async (task: Task) => {
     haptics.success();
-    const result = await dispatch(
+    await dispatch(
       updateTaskById({
         id: task.id,
         updates: {
@@ -155,10 +154,6 @@ const TasksScreen: React.FC = () => {
         },
       })
     );
-
-    if (updateTaskById.fulfilled.match(result) && result.payload?.status === 'completed') {
-      showTaskCompletedNotification(result.payload.title);
-    }
   };
 
   const handleDelete = async (taskId: string) => {
@@ -282,7 +277,8 @@ const TasksScreen: React.FC = () => {
           <LoadingSkeleton lines={5} style={styles.skeleton} />
         ) : showEmpty ? (
           <EmptyState
-            emoji="📋"
+            iconName="clipboard-outline"
+            iconColor={colors.primary}
             title="No tasks for this filter"
             subtitle="Pull to refresh or create a task to get started."
           />

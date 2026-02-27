@@ -74,10 +74,10 @@ const AgentsScreen: React.FC = () => {
 
   const getAgentEmoji = (type: Agent['type']) => {
     switch (type) {
-      case 'assistant': return '🤖';
-      case 'specialist': return '🔧';
-      case 'manager': return '👔';
-      default: return '🤖';
+      case 'assistant': return 'hardware-chip-outline';
+      case 'specialist': return 'build-outline';
+      case 'manager': return 'briefcase-outline';
+      default: return 'hardware-chip-outline';
     }
   };
 
@@ -85,7 +85,9 @@ const AgentsScreen: React.FC = () => {
     <TouchableOpacity style={styles.agentCard} activeOpacity={0.85}>
       <View style={styles.agentHeader}>
         <View style={styles.agentInfo}>
-          <Text style={styles.agentEmoji}>{getAgentEmoji(item.type)}</Text>
+          <View style={styles.agentIconWrap}>
+            <Icon name={getAgentEmoji(item.type)} size={22} color={colors.primary} />
+          </View>
           <View style={styles.agentDetails}>
             <Text style={styles.agentName}>{item.name}</Text>
             <Text style={styles.agentType}>
@@ -159,7 +161,8 @@ const AgentsScreen: React.FC = () => {
       ) : null}
       {showEmpty ? (
         <EmptyState
-          emoji="🤖"
+          iconName="hardware-chip-outline"
+          iconColor={colors.primary}
           title="No agents available"
           subtitle="Agents will appear here once they're connected to your OpenClaw instance."
         />
@@ -251,8 +254,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  agentEmoji: {
-    fontSize: 32,
+  agentIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceLight,
     marginRight: spacing.sm,
   },
   agentDetails: {

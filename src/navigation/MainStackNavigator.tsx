@@ -1,9 +1,13 @@
 import React, { useEffect } from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import {
+  CardStyleInterpolators,
+  createStackNavigator,
+} from '@react-navigation/stack';
 import MainTabNavigator from './MainTabNavigator';
 import CreateTaskScreen from '../screens/main/CreateTaskScreen';
 import socketService from '../services/socket';
 import { colors } from '../styles/theme';
+import { withScreenBoundary } from '../components/withScreenBoundary';
 
 export type MainStackParamList = {
   MainTabs: undefined;
@@ -11,6 +15,8 @@ export type MainStackParamList = {
 };
 
 const Stack = createStackNavigator<MainStackParamList>();
+const MainTabsWithBoundary = withScreenBoundary(MainTabNavigator);
+const CreateTaskWithBoundary = withScreenBoundary(CreateTaskScreen);
 
 const MainStackNavigator: React.FC = () => {
   useEffect(() => {
@@ -28,18 +34,20 @@ const MainStackNavigator: React.FC = () => {
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
       }}>
       <Stack.Screen
         name="MainTabs"
-        component={MainTabNavigator}
+        component={MainTabsWithBoundary}
         options={{ headerShown: false }}
       />
       <Stack.Screen
         name="CreateTask"
-        component={CreateTaskScreen}
+        component={CreateTaskWithBoundary}
         options={{
           headerShown: false,
           presentation: 'modal',
+          cardStyleInterpolator: CardStyleInterpolators.forVerticalIOS,
         }}
       />
     </Stack.Navigator>

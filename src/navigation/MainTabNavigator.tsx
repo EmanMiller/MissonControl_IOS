@@ -7,6 +7,7 @@ import AgentsScreen from '../screens/main/AgentsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import { colors } from '../styles/theme';
 import { RootState } from '../store';
+import { withScreenBoundary } from '../components/withScreenBoundary';
 
 export type MainTabParamList = {
   Tasks: undefined;
@@ -15,6 +16,9 @@ export type MainTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const TasksScreenWithBoundary = withScreenBoundary(TasksScreen);
+const AgentsScreenWithBoundary = withScreenBoundary(AgentsScreen);
+const ProfileScreenWithBoundary = withScreenBoundary(ProfileScreen);
 
 type TabIconRendererProps = {
   color: string;
@@ -61,7 +65,7 @@ const MainTabNavigator: React.FC = () => {
     >
       <Tab.Screen
         name="Tasks"
-        component={TasksScreen}
+        component={TasksScreenWithBoundary}
         options={{
           tabBarLabel: 'Tasks',
           tabBarBadge: newCompletedCount > 0 ? newCompletedCount : undefined,
@@ -70,7 +74,7 @@ const MainTabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Agents"
-        component={AgentsScreen}
+        component={AgentsScreenWithBoundary}
         options={{
           tabBarLabel: 'Agents',
           tabBarIcon: agentsTabIcon,
@@ -78,7 +82,7 @@ const MainTabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileScreenWithBoundary}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: profileTabIcon,
