@@ -31,7 +31,18 @@ class ApiService {
     this.client.interceptors.request.use(
       config => {
         if (this.authToken) {
-          config.headers.Authorization = `Bearer ${this.authToken}`;
+          const token = this.authToken.trim();
+          const bearerToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+
+          if (config.headers && typeof (config.headers as any).set === 'function') {
+            (config.headers as any).set('Authorization', bearerToken);
+            (config.headers as any).set('X-API-Key', token);
+          } else {
+            const mutableHeaders = (config.headers ?? {}) as Record<string, string>;
+            mutableHeaders.Authorization = bearerToken;
+            mutableHeaders['X-API-Key'] = token;
+            config.headers = mutableHeaders as any;
+          }
         }
         console.log('API Request:', config.method?.toUpperCase(), config.url);
         return config;
@@ -41,6 +52,19 @@ class ApiService {
 
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
+        if (response.status >= 400) {
+          const url = response.config.url ?? 'unknown';
+          if (response.status === 401 || response.status === 403) {
+            this.setMode('local', 'Authentication required. Using local fallback data.');
+          }
+          this.logErrorOnce(
+            response.status,
+            `HTTP ${response.status}`,
+            url
+          );
+          return response;
+        }
+
         this.lastErrorSignature = null;
         this.setMode('remote', `Connected to OpenClaw API (${API_BASE_URL})`);
         console.log('API Response:', response.status, response.config.url);
@@ -67,6 +91,13 @@ class ApiService {
   }
 
   private logErrorOnce(status: number | undefined, message: string, url: string) {
+    const isExpectedAuthProbe =
+      (status === 401 || status === 403) &&
+      (url.includes('/tasks') || url.includes('/auth/me'));
+    if (isExpectedAuthProbe) {
+      return;
+    }
+
     const signature = `${status ?? 'network'}:${url}:${message}`;
     if (this.lastErrorSignature === signature) {
       return;
