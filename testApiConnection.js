@@ -7,7 +7,7 @@
 
 const axios = require('axios');
 
-const BASE_URL = process.env.OPENCLAW_URL || 'https://your-openclaw-host:3001';
+const BASE_URL = process.env.OPENCLAW_URL || process.env.OPENCLAW_ORIGIN || 'http://localhost:3001';
 const API_BASE = `${BASE_URL}/api`;
 
 async function testEndpoint(url, method = 'GET', data = null) {
