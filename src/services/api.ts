@@ -125,9 +125,10 @@ class ApiService {
   private async clearAuthToken() {
     try {
       await secureStorage.removeItem(AUTH_TOKEN_KEY);
-      this.authToken = null;
     } catch (error) {
       console.error('Failed to clear auth token:', error);
+    } finally {
+      this.authToken = null;
     }
   }
 
