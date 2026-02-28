@@ -49,6 +49,8 @@ OAuth callback URI used by the app:
 
 - `missioncontrolmobile://auth/callback`
 
+If backend OAuth start routes are unavailable, the app falls back to direct provider auth URL (Google/GitHub) and still handles the deep-link callback on iOS.
+
 Mobile deep-link plumbing is already configured in:
 
 - iOS: `ios/MissionControlMobile/Info.plist`

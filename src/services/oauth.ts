@@ -60,7 +60,9 @@ class OAuthService {
     return startUrl.toString();
   }
 
-  private async doesStartPathExist(startPath: string): Promise<boolean> {
+  private async probeStartPath(
+    startPath: string
+  ): Promise<{ exists: boolean; reachable: boolean }> {
     try {
       const response = await axios.get(`${OAUTH_BACKEND_BASE_URL}${startPath}`, {
         timeout: 4000,
@@ -68,9 +70,15 @@ class OAuthService {
         validateStatus: () => true,
       });
 
-      return response.status !== 404;
+      return {
+        exists: response.status !== 404,
+        reachable: true,
+      };
     } catch {
-      return false;
+      return {
+        exists: false,
+        reachable: false,
+      };
     }
   }
 
@@ -85,17 +93,75 @@ class OAuthService {
       new Set([config.startPath, ...(config.fallbackStartPaths ?? [])])
     );
 
+    let anyReachable = false;
+
     for (const candidatePath of candidatePaths) {
-      const exists = await this.doesStartPathExist(candidatePath);
-      if (exists) {
+      const result = await this.probeStartPath(candidatePath);
+      if (result.reachable) {
+        anyReachable = true;
+      }
+      if (result.exists) {
         this.resolvedStartPaths[provider] = candidatePath;
         return candidatePath;
       }
     }
 
+    if (!anyReachable) {
+      throw new Error(
+        `Cannot reach OAuth backend at ${OAUTH_BACKEND_BASE_URL}.`
+      );
+    }
+
     throw new Error(
       `OAuth start endpoint not found on ${OAUTH_BACKEND_BASE_URL}. Checked: ${candidatePaths.join(', ')}`
     );
+  }
+
+  private buildDirectProviderUrl(provider: OAuthProvider, state: string): string | null {
+    const providerConfig = OAUTH_CONFIG.providers[provider];
+    if (!isOAuthClientIdConfigured(providerConfig.clientId)) {
+      return null;
+    }
+
+    if (provider === 'google') {
+      const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      url.searchParams.set('client_id', providerConfig.clientId);
+      url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+      url.searchParams.set('response_type', 'token');
+      url.searchParams.set('scope', 'openid email profile');
+      url.searchParams.set('state', state);
+      url.searchParams.set('prompt', 'select_account');
+      return url.toString();
+    }
+
+    if (provider === 'github') {
+      const url = new URL('https://github.com/login/oauth/authorize');
+      url.searchParams.set('client_id', providerConfig.clientId);
+      url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+      url.searchParams.set('scope', 'read:user user:email');
+      url.searchParams.set('state', state);
+      return url.toString();
+    }
+
+    return null;
+  }
+
+  private extractCallbackParams(parsedUrl: URL): URLSearchParams {
+    const params = new URLSearchParams(parsedUrl.search);
+    const rawHash = parsedUrl.hash.startsWith('#')
+      ? parsedUrl.hash.slice(1)
+      : parsedUrl.hash;
+
+    if (rawHash) {
+      const hashParams = new URLSearchParams(rawHash);
+      hashParams.forEach((value, key) => {
+        if (!params.has(key)) {
+          params.set(key, value);
+        }
+      });
+    }
+
+    return params;
   }
 
   private waitForCallback(provider: OAuthProvider, state: string) {
@@ -118,8 +184,9 @@ class OAuthService {
         }
 
         const parsed = new URL(incomingUrl);
-        const callbackState = parsed.searchParams.get('state');
-        const callbackProvider = parsed.searchParams.get('provider');
+        const params = this.extractCallbackParams(parsed);
+        const callbackState = params.get('state');
+        const callbackProvider = params.get('provider');
 
         if (callbackProvider && callbackProvider !== provider) {
           return;
@@ -129,7 +196,7 @@ class OAuthService {
           return;
         }
 
-        complete(() => resolve(parsed.searchParams));
+        complete(() => resolve(params));
       };
 
       const subscription = Linking.addEventListener('url', event => {
@@ -233,8 +300,18 @@ class OAuthService {
 
   async signIn(provider: OAuthProvider): Promise<OAuthResult> {
     const state = this.createState();
-    const startPath = await this.resolveStartPath(provider);
-    const authUrl = this.buildStartUrl(provider, state, startPath);
+    let authUrl: string;
+    try {
+      const startPath = await this.resolveStartPath(provider);
+      authUrl = this.buildStartUrl(provider, state, startPath);
+    } catch (error) {
+      const directUrl = this.buildDirectProviderUrl(provider, state);
+      if (!directUrl) {
+        throw error;
+      }
+      authUrl = directUrl;
+    }
+
     const canOpen = await Linking.canOpenURL(authUrl);
     if (!canOpen) {
       throw new Error('Unable to open OAuth authorization URL.');
