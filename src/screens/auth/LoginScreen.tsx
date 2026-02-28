@@ -19,8 +19,12 @@ import {
   loginWithCredentials,
   loginWithOAuth,
 } from '../../store/thunks/authThunks';
-import { resetTransientState } from '../../store/slices/authSlice';
-import { setRememberMe } from '../../store/slices/appSlice';
+import { loginSuccess, resetTransientState } from '../../store/slices/authSlice';
+import {
+  completeIntro,
+  completeOpenClawSetup,
+  setRememberMe,
+} from '../../store/slices/appSlice';
 import type { OAuthProvider } from '../../config/oauth';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { colors, spacing, typography, borderRadius } from '../../styles/theme';
@@ -134,6 +138,20 @@ const LoginScreen: React.FC = () => {
     } catch {
       haptics.error();
     }
+  };
+
+  const handleDemoMode = () => {
+    haptics.impactLight();
+    dispatch(
+      loginSuccess({
+        id: 'demo-user',
+        name: 'Demo User',
+        email: 'demo@missioncontrol.local',
+        provider: 'credentials',
+      })
+    );
+    dispatch(completeIntro());
+    dispatch(completeOpenClawSetup());
   };
 
   return (
@@ -301,6 +319,15 @@ const LoginScreen: React.FC = () => {
               disabled={isCredentialsLoading}
             >
               <Text style={styles.createAccountText}>Create Account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.demoButton}
+              onPress={handleDemoMode}
+              disabled={isLoading}
+            >
+              <Icon name="eye-outline" size={16} color={colors.primary} />
+              <Text style={styles.demoButtonText}>Continue in Demo Mode</Text>
             </TouchableOpacity>
 
             {isOAuthLoading ? (
@@ -515,6 +542,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.footnote,
     textDecorationLine: 'underline',
+  },
+  demoButton: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.medium,
+    borderWidth: 1,
+    borderColor: `${colors.primary}66`,
+    backgroundColor: `${colors.primary}14`,
+  },
+  demoButtonText: {
+    color: colors.primary,
+    fontSize: typography.footnote,
+    fontWeight: '700',
   },
   cancelOauthButton: {
     alignItems: 'center',
