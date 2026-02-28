@@ -36,9 +36,14 @@ OAuth runtime config is in `src/config/oauth.ts` and generated values come from 
 
 Default OAuth backend routes expected by the app:
 
-- `/api/auth/oauth/google/start`
-- `/api/auth/oauth/github/start`
-- `/api/auth/oauth/mobile/exchange`
+- Preferred:
+  - `/auth/oauth/google/start`
+  - `/auth/oauth/github/start`
+  - `/auth/oauth/mobile/exchange`
+- Also supported automatically (fallback):
+  - `/api/auth/oauth/google/start`
+  - `/api/auth/oauth/github/start`
+  - `/api/auth/oauth/mobile/exchange`
 
 OAuth callback URI used by the app:
 

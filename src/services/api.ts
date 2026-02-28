@@ -436,23 +436,52 @@ class ApiService {
     redirectUri: string,
     state?: string
   ): Promise<{ token?: string; user?: any }> {
-    const response = await axios.post(`${OAUTH_BACKEND_BASE_URL}${OAUTH_EXCHANGE_PATH}`, {
+    const payload = {
       provider,
       code,
       redirectUri,
       state,
-    }, {
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    };
 
-    if (response.data?.token) {
-      await this.saveAuthToken(response.data.token);
+    const candidatePaths = Array.from(
+      new Set([
+        OAUTH_EXCHANGE_PATH,
+        '/auth/oauth/mobile/exchange',
+        '/api/auth/oauth/mobile/exchange',
+      ])
+    );
+
+    let lastError: unknown;
+
+    for (const path of candidatePaths) {
+      try {
+        const response = await axios.post(`${OAUTH_BACKEND_BASE_URL}${path}`, payload, {
+          timeout: 10000,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.data?.token) {
+          await this.saveAuthToken(response.data.token);
+        }
+
+        return response.data ?? {};
+      } catch (error: any) {
+        lastError = error;
+        const status = error?.response?.status;
+        if (status === 404) {
+          continue;
+        }
+        throw error;
+      }
     }
 
-    return response.data ?? {};
+    if (lastError) {
+      throw lastError;
+    }
+
+    throw new Error('OAuth exchange failed: no valid exchange endpoint found.');
   }
 
   async getCurrentUser(): Promise<any | null> {

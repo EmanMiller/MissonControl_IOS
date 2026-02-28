@@ -1,4 +1,5 @@
 import { Linking, Platform } from 'react-native';
+import axios from 'axios';
 import {
   isOAuthClientIdConfigured,
   OAUTH_BACKEND_BASE_URL,
@@ -23,6 +24,8 @@ type OAuthResult = {
 const normalizePath = (value: string) => value.replace(/^\/+|\/+$/g, '');
 
 class OAuthService {
+  private resolvedStartPaths: Partial<Record<OAuthProvider, string>> = {};
+
   private createState() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
@@ -43,9 +46,9 @@ class OAuthService {
     }
   }
 
-  private buildStartUrl(provider: OAuthProvider, state: string) {
+  private buildStartUrl(provider: OAuthProvider, state: string, startPath: string) {
     const providerConfig = OAUTH_CONFIG.providers[provider];
-    const startUrl = new URL(`${OAUTH_BACKEND_BASE_URL}${providerConfig.startPath}`);
+    const startUrl = new URL(`${OAUTH_BACKEND_BASE_URL}${startPath}`);
     startUrl.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
     startUrl.searchParams.set('state', state);
     startUrl.searchParams.set('platform', Platform.OS);
@@ -55,6 +58,44 @@ class OAuthService {
     }
 
     return startUrl.toString();
+  }
+
+  private async doesStartPathExist(startPath: string): Promise<boolean> {
+    try {
+      const response = await axios.get(`${OAUTH_BACKEND_BASE_URL}${startPath}`, {
+        timeout: 4000,
+        maxRedirects: 0,
+        validateStatus: () => true,
+      });
+
+      return response.status !== 404;
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolveStartPath(provider: OAuthProvider): Promise<string> {
+    const cached = this.resolvedStartPaths[provider];
+    if (cached) {
+      return cached;
+    }
+
+    const config = OAUTH_CONFIG.providers[provider];
+    const candidatePaths = Array.from(
+      new Set([config.startPath, ...(config.fallbackStartPaths ?? [])])
+    );
+
+    for (const candidatePath of candidatePaths) {
+      const exists = await this.doesStartPathExist(candidatePath);
+      if (exists) {
+        this.resolvedStartPaths[provider] = candidatePath;
+        return candidatePath;
+      }
+    }
+
+    throw new Error(
+      `OAuth start endpoint not found on ${OAUTH_BACKEND_BASE_URL}. Checked: ${candidatePaths.join(', ')}`
+    );
   }
 
   private waitForCallback(provider: OAuthProvider, state: string) {
@@ -192,7 +233,8 @@ class OAuthService {
 
   async signIn(provider: OAuthProvider): Promise<OAuthResult> {
     const state = this.createState();
-    const authUrl = this.buildStartUrl(provider, state);
+    const startPath = await this.resolveStartPath(provider);
+    const authUrl = this.buildStartUrl(provider, state, startPath);
     const canOpen = await Linking.canOpenURL(authUrl);
     if (!canOpen) {
       throw new Error('Unable to open OAuth authorization URL.');
