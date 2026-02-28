@@ -22,9 +22,16 @@ type OAuthResult = {
 };
 
 const normalizePath = (value: string) => value.replace(/^\/+|\/+$/g, '');
+const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+
+type DirectAuthContext = {
+  provider: OAuthProvider;
+  codeVerifier?: string;
+};
 
 class OAuthService {
   private resolvedStartPaths: Partial<Record<OAuthProvider, string>> = {};
+  private directAuthStates = new Map<string, DirectAuthContext>();
 
   private createState() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -58,6 +65,14 @@ class OAuthService {
     }
 
     return startUrl.toString();
+  }
+
+  private createCodeVerifier(length = 96) {
+    let value = '';
+    for (let i = 0; i < length; i += 1) {
+      value += PKCE_CHARSET.charAt(Math.floor(Math.random() * PKCE_CHARSET.length));
+    }
+    return value;
   }
 
   private async probeStartPath(
@@ -117,21 +132,33 @@ class OAuthService {
     );
   }
 
-  private buildDirectProviderUrl(provider: OAuthProvider, state: string): string | null {
+  private buildDirectProviderUrl(
+    provider: OAuthProvider,
+    state: string
+  ): { url: string; context: DirectAuthContext } | null {
     const providerConfig = OAUTH_CONFIG.providers[provider];
     if (!isOAuthClientIdConfigured(providerConfig.clientId)) {
       return null;
     }
 
     if (provider === 'google') {
+      const codeVerifier = this.createCodeVerifier();
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       url.searchParams.set('client_id', providerConfig.clientId);
       url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
-      url.searchParams.set('response_type', 'token');
+      url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', 'openid email profile');
       url.searchParams.set('state', state);
       url.searchParams.set('prompt', 'select_account');
-      return url.toString();
+      url.searchParams.set('code_challenge', codeVerifier);
+      url.searchParams.set('code_challenge_method', 'plain');
+      return {
+        url: url.toString(),
+        context: {
+          provider,
+          codeVerifier,
+        },
+      };
     }
 
     if (provider === 'github') {
@@ -140,7 +167,12 @@ class OAuthService {
       url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
       url.searchParams.set('scope', 'read:user user:email');
       url.searchParams.set('state', state);
-      return url.toString();
+      return {
+        url: url.toString(),
+        context: {
+          provider,
+        },
+      };
     }
 
     return null;
@@ -298,6 +330,40 @@ class OAuthService {
     return this.normalizeUser(user, provider);
   }
 
+  private async exchangeGoogleCodeDirectly(
+    code: string,
+    codeVerifier: string
+  ): Promise<OAuthUser | null> {
+    const googleClientId = OAUTH_CONFIG.providers.google.clientId;
+    if (!isOAuthClientIdConfigured(googleClientId)) {
+      return null;
+    }
+
+    const body = new URLSearchParams();
+    body.set('client_id', googleClientId);
+    body.set('code', code);
+    body.set('grant_type', 'authorization_code');
+    body.set('redirect_uri', OAUTH_REDIRECT_URI);
+    body.set('code_verifier', codeVerifier);
+
+    const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 10000,
+    });
+
+    const accessToken =
+      response.data?.access_token ??
+      response.data?.token;
+    if (!accessToken) {
+      return null;
+    }
+
+    await apiService.setAuthToken(String(accessToken));
+    return this.resolveGoogleUserFromAccessToken(String(accessToken));
+  }
+
   async signIn(provider: OAuthProvider): Promise<OAuthResult> {
     const state = this.createState();
     let authUrl: string;
@@ -309,7 +375,8 @@ class OAuthService {
       if (!directUrl) {
         throw error;
       }
-      authUrl = directUrl;
+      authUrl = directUrl.url;
+      this.directAuthStates.set(state, directUrl.context);
     }
 
     const canOpen = await Linking.canOpenURL(authUrl);
@@ -321,27 +388,85 @@ class OAuthService {
 
     await Linking.openURL(authUrl);
     const callbackParams = await callbackPromise;
+    const directContext = this.directAuthStates.get(state);
 
-    const callbackError =
-      callbackParams.get('error_description') || callbackParams.get('error');
-    if (callbackError) {
-      throw new Error(callbackError);
-    }
+    try {
+      const callbackError =
+        callbackParams.get('error_description') || callbackParams.get('error');
+      if (callbackError) {
+        throw new Error(callbackError);
+      }
 
-    const callbackToken =
-      callbackParams.get('token') || callbackParams.get('access_token');
-    if (callbackToken) {
-      await apiService.setAuthToken(callbackToken);
+      const callbackToken =
+        callbackParams.get('token') || callbackParams.get('access_token');
+      if (callbackToken) {
+        await apiService.setAuthToken(callbackToken);
+        const callbackUser = this.parseUserFromCallback(callbackParams, provider);
+        if (callbackUser) {
+          return { user: callbackUser };
+        }
+
+        if (provider === 'google') {
+          const googleUser = await this.resolveGoogleUserFromAccessToken(callbackToken);
+          if (googleUser) {
+            return { user: googleUser };
+          }
+        }
+
+        const serverUser = await this.resolveUserFromServer(provider);
+        if (serverUser) {
+          return { user: serverUser };
+        }
+
+        throw new Error(
+          `${OAUTH_CONFIG.providers[provider].label} sign-in completed, but no user profile was returned.`
+        );
+      }
+
       const callbackUser = this.parseUserFromCallback(callbackParams, provider);
       if (callbackUser) {
         return { user: callbackUser };
       }
 
       if (provider === 'google') {
-        const googleUser = await this.resolveGoogleUserFromAccessToken(callbackToken);
-        if (googleUser) {
-          return { user: googleUser };
+        const accessToken = callbackParams.get('access_token');
+        if (accessToken) {
+          const googleUser = await this.resolveGoogleUserFromAccessToken(accessToken);
+          if (googleUser) {
+            return { user: googleUser };
+          }
         }
+      }
+
+      const code = callbackParams.get('code');
+      if (!code) {
+        throw new Error('OAuth callback did not include a token or code.');
+      }
+
+      if (
+        provider === 'google' &&
+        directContext?.provider === 'google' &&
+        directContext.codeVerifier
+      ) {
+        const directGoogleUser = await this.exchangeGoogleCodeDirectly(
+          code,
+          directContext.codeVerifier
+        );
+        if (directGoogleUser) {
+          return { user: directGoogleUser };
+        }
+      }
+
+      const exchangeResponse = await apiService.exchangeOAuthCode(
+        provider,
+        code,
+        OAUTH_REDIRECT_URI,
+        state
+      );
+
+      if (exchangeResponse?.user?.id && exchangeResponse?.user?.email) {
+        const user = this.normalizeUser(exchangeResponse.user, provider);
+        return { user };
       }
 
       const serverUser = await this.resolveUserFromServer(provider);
@@ -350,50 +475,11 @@ class OAuthService {
       }
 
       throw new Error(
-        `${OAUTH_CONFIG.providers[provider].label} sign-in completed, but no user profile was returned.`
+        `${OAUTH_CONFIG.providers[provider].label} sign-in succeeded, but account data is missing.`
       );
+    } finally {
+      this.directAuthStates.delete(state);
     }
-
-    const callbackUser = this.parseUserFromCallback(callbackParams, provider);
-    if (callbackUser) {
-      return { user: callbackUser };
-    }
-
-    if (provider === 'google') {
-      const accessToken = callbackParams.get('access_token');
-      if (accessToken) {
-        const googleUser = await this.resolveGoogleUserFromAccessToken(accessToken);
-        if (googleUser) {
-          return { user: googleUser };
-        }
-      }
-    }
-
-    const code = callbackParams.get('code');
-    if (!code) {
-      throw new Error('OAuth callback did not include a token or code.');
-    }
-
-    const exchangeResponse = await apiService.exchangeOAuthCode(
-      provider,
-      code,
-      OAUTH_REDIRECT_URI,
-      state
-    );
-
-    if (exchangeResponse?.user?.id && exchangeResponse?.user?.email) {
-      const user = this.normalizeUser(exchangeResponse.user, provider);
-      return { user };
-    }
-
-    const serverUser = await this.resolveUserFromServer(provider);
-    if (serverUser) {
-      return { user: serverUser };
-    }
-
-    throw new Error(
-      `${OAUTH_CONFIG.providers[provider].label} sign-in succeeded, but account data is missing.`
-    );
   }
 }
 

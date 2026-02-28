@@ -51,6 +51,12 @@ OAuth callback URI used by the app:
 
 If backend OAuth start routes are unavailable, the app falls back to direct provider auth URL (Google/GitHub) and still handles the deep-link callback on iOS.
 
+Google setup notes for direct mobile fallback:
+
+- Use an OAuth client in Google Cloud that allows native mobile flows.
+- Ensure your OAuth consent screen is configured and published for your test users.
+- Keep `GOOGLE_CLIENT_ID` in `.env` aligned with that mobile-capable client.
+
 Mobile deep-link plumbing is already configured in:
 
 - iOS: `ios/MissionControlMobile/Info.plist`
