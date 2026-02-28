@@ -448,6 +448,10 @@ class ApiService {
         OAUTH_EXCHANGE_PATH,
         '/auth/oauth/mobile/exchange',
         '/api/auth/oauth/mobile/exchange',
+        '/auth/oauth/exchange',
+        '/api/auth/oauth/exchange',
+        '/oauth/mobile/exchange',
+        '/oauth/exchange',
       ])
     );
 

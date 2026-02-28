@@ -44,6 +44,8 @@ Default OAuth backend routes expected by the app:
   - `/api/auth/oauth/google/start`
   - `/api/auth/oauth/github/start`
   - `/api/auth/oauth/mobile/exchange`
+  - `/auth/oauth/google` and `/api/auth/oauth/google`
+  - `/auth/oauth/github` and `/api/auth/oauth/github`
 
 OAuth callback URI used by the app:
 
