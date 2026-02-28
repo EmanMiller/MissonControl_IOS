@@ -22,16 +22,73 @@ type OAuthResult = {
 };
 
 const normalizePath = (value: string) => value.replace(/^\/+|\/+$/g, '');
-const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 
-type DirectAuthContext = {
+type OAuthRuntimeMode = 'backend' | 'direct' | 'unknown';
+
+export type OAuthProbePathResult = {
+  path: string;
+  reachable: boolean;
+  exists: boolean;
+  status?: number | null;
+  error?: string;
+};
+
+export type OAuthDebugInfo = {
   provider: OAuthProvider;
-  codeVerifier?: string;
+  backendBaseUrl: string;
+  mode: OAuthRuntimeMode;
+  selectedStartPath: string | null;
+  checkedPaths: OAuthProbePathResult[];
+  backendReachable: boolean;
+  lastAuthUrl: string | null;
+  lastError: string | null;
+  lastUpdatedAt: string;
 };
 
 class OAuthService {
   private resolvedStartPaths: Partial<Record<OAuthProvider, string>> = {};
-  private directAuthStates = new Map<string, DirectAuthContext>();
+  private debugByProvider = new Map<OAuthProvider, OAuthDebugInfo>();
+
+  private nowIso() {
+    return new Date().toISOString();
+  }
+
+  private initDebugInfo(provider: OAuthProvider): OAuthDebugInfo {
+    const existing = this.debugByProvider.get(provider);
+    if (existing) {
+      return existing;
+    }
+
+    const created: OAuthDebugInfo = {
+      provider,
+      backendBaseUrl: OAUTH_BACKEND_BASE_URL,
+      mode: 'unknown',
+      selectedStartPath: null,
+      checkedPaths: [],
+      backendReachable: false,
+      lastAuthUrl: null,
+      lastError: null,
+      lastUpdatedAt: this.nowIso(),
+    };
+    this.debugByProvider.set(provider, created);
+    return created;
+  }
+
+  private updateDebugInfo(
+    provider: OAuthProvider,
+    updater: (current: OAuthDebugInfo) => OAuthDebugInfo
+  ) {
+    const current = this.initDebugInfo(provider);
+    const next = updater(current);
+    this.debugByProvider.set(provider, {
+      ...next,
+      lastUpdatedAt: this.nowIso(),
+    });
+  }
+
+  getDebugInfo(provider: OAuthProvider): OAuthDebugInfo {
+    return this.initDebugInfo(provider);
+  }
 
   private createState() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -67,17 +124,9 @@ class OAuthService {
     return startUrl.toString();
   }
 
-  private createCodeVerifier(length = 96) {
-    let value = '';
-    for (let i = 0; i < length; i += 1) {
-      value += PKCE_CHARSET.charAt(Math.floor(Math.random() * PKCE_CHARSET.length));
-    }
-    return value;
-  }
-
   private async probeStartPath(
     startPath: string
-  ): Promise<{ exists: boolean; reachable: boolean }> {
+  ): Promise<{ exists: boolean; reachable: boolean; status?: number; errorMessage?: string }> {
     try {
       const response = await axios.get(`${OAUTH_BACKEND_BASE_URL}${startPath}`, {
         timeout: 4000,
@@ -88,11 +137,13 @@ class OAuthService {
       return {
         exists: response.status !== 404,
         reachable: true,
+        status: response.status,
       };
-    } catch {
+    } catch (error: any) {
       return {
         exists: false,
         reachable: false,
+        errorMessage: error?.message ?? 'request failed',
       };
     }
   }
@@ -109,17 +160,41 @@ class OAuthService {
     );
 
     let anyReachable = false;
+    const checkedPaths: OAuthProbePathResult[] = [];
 
     for (const candidatePath of candidatePaths) {
       const result = await this.probeStartPath(candidatePath);
+      checkedPaths.push({
+        path: candidatePath,
+        reachable: result.reachable,
+        exists: result.exists,
+        status: result.status ?? null,
+        error: result.errorMessage,
+      });
       if (result.reachable) {
         anyReachable = true;
       }
       if (result.exists) {
         this.resolvedStartPaths[provider] = candidatePath;
+        this.updateDebugInfo(provider, current => ({
+          ...current,
+          checkedPaths,
+          selectedStartPath: candidatePath,
+          backendReachable: anyReachable,
+          mode: 'backend',
+          lastError: null,
+        }));
         return candidatePath;
       }
     }
+
+    this.updateDebugInfo(provider, current => ({
+      ...current,
+      checkedPaths,
+      selectedStartPath: null,
+      backendReachable: anyReachable,
+      mode: 'unknown',
+    }));
 
     if (!anyReachable) {
       throw new Error(
@@ -135,30 +210,21 @@ class OAuthService {
   private buildDirectProviderUrl(
     provider: OAuthProvider,
     state: string
-  ): { url: string; context: DirectAuthContext } | null {
+  ): Promise<{ url: string } | null> {
+    return this.buildDirectProviderUrlInternal(provider, state);
+  }
+
+  private async buildDirectProviderUrlInternal(
+    provider: OAuthProvider,
+    state: string
+  ): Promise<{ url: string } | null> {
     const providerConfig = OAUTH_CONFIG.providers[provider];
     if (!isOAuthClientIdConfigured(providerConfig.clientId)) {
       return null;
     }
 
     if (provider === 'google') {
-      const codeVerifier = this.createCodeVerifier();
-      const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      url.searchParams.set('client_id', providerConfig.clientId);
-      url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
-      url.searchParams.set('response_type', 'code');
-      url.searchParams.set('scope', 'openid email profile');
-      url.searchParams.set('state', state);
-      url.searchParams.set('prompt', 'select_account');
-      url.searchParams.set('code_challenge', codeVerifier);
-      url.searchParams.set('code_challenge_method', 'plain');
-      return {
-        url: url.toString(),
-        context: {
-          provider,
-          codeVerifier,
-        },
-      };
+      return null;
     }
 
     if (provider === 'github') {
@@ -169,9 +235,6 @@ class OAuthService {
       url.searchParams.set('state', state);
       return {
         url: url.toString(),
-        context: {
-          provider,
-        },
       };
     }
 
@@ -330,65 +393,83 @@ class OAuthService {
     return this.normalizeUser(user, provider);
   }
 
-  private async exchangeGoogleCodeDirectly(
-    code: string,
-    codeVerifier: string
-  ): Promise<OAuthUser | null> {
-    const googleClientId = OAUTH_CONFIG.providers.google.clientId;
-    if (!isOAuthClientIdConfigured(googleClientId)) {
-      return null;
-    }
-
-    const body = new URLSearchParams();
-    body.set('client_id', googleClientId);
-    body.set('code', code);
-    body.set('grant_type', 'authorization_code');
-    body.set('redirect_uri', OAUTH_REDIRECT_URI);
-    body.set('code_verifier', codeVerifier);
-
-    const response = await axios.post('https://oauth2.googleapis.com/token', body.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      timeout: 10000,
-    });
-
-    const accessToken =
-      response.data?.access_token ??
-      response.data?.token;
-    if (!accessToken) {
-      return null;
-    }
-
-    await apiService.setAuthToken(String(accessToken));
-    return this.resolveGoogleUserFromAccessToken(String(accessToken));
-  }
-
   async signIn(provider: OAuthProvider): Promise<OAuthResult> {
     const state = this.createState();
+    this.updateDebugInfo(provider, current => ({
+      ...current,
+      mode: 'unknown',
+      selectedStartPath: null,
+      checkedPaths: [],
+      backendReachable: false,
+      lastAuthUrl: null,
+      lastError: null,
+    }));
+
     let authUrl: string;
     try {
       const startPath = await this.resolveStartPath(provider);
       authUrl = this.buildStartUrl(provider, state, startPath);
-    } catch (error) {
-      const directUrl = this.buildDirectProviderUrl(provider, state);
-      if (!directUrl) {
-        throw error;
+      this.updateDebugInfo(provider, current => ({
+        ...current,
+        mode: 'backend',
+        selectedStartPath: startPath,
+        lastAuthUrl: authUrl,
+        lastError: null,
+      }));
+    } catch (resolveError: any) {
+      const resolveMessage = resolveError?.message ?? 'Unable to resolve backend OAuth route.';
+      let directUrl: { url: string } | null = null;
+      try {
+        directUrl = await this.buildDirectProviderUrl(provider, state);
+      } catch (directError: any) {
+        const directMessage = directError?.message ?? 'Direct provider URL unavailable.';
+        const combined = `${resolveMessage} ${directMessage}`.trim();
+        this.updateDebugInfo(provider, current => ({
+          ...current,
+          mode: 'unknown',
+          lastError: combined,
+        }));
+        throw new Error(combined);
       }
+
+      if (!directUrl) {
+        const extra =
+          provider === 'google'
+            ? ' Google OAuth requires an OpenClaw backend OAuth endpoint.'
+            : '';
+        this.updateDebugInfo(provider, current => ({
+          ...current,
+          mode: 'unknown',
+          lastError: `${resolveMessage}${extra}`.trim(),
+        }));
+        throw new Error(`${resolveMessage}${extra}`.trim());
+      }
+
       authUrl = directUrl.url;
-      this.directAuthStates.set(state, directUrl.context);
+      this.updateDebugInfo(provider, current => ({
+        ...current,
+        mode: 'direct',
+        selectedStartPath: 'direct-provider-url',
+        lastAuthUrl: authUrl,
+        lastError: null,
+      }));
     }
 
     const canOpen = await Linking.canOpenURL(authUrl);
     if (!canOpen) {
-      throw new Error('Unable to open OAuth authorization URL.');
+      const message = 'Unable to open OAuth authorization URL.';
+      this.updateDebugInfo(provider, current => ({
+        ...current,
+        lastAuthUrl: authUrl,
+        lastError: message,
+      }));
+      throw new Error(message);
     }
 
     const callbackPromise = this.waitForCallback(provider, state);
 
     await Linking.openURL(authUrl);
     const callbackParams = await callbackPromise;
-    const directContext = this.directAuthStates.get(state);
 
     try {
       const callbackError =
@@ -443,20 +524,6 @@ class OAuthService {
         throw new Error('OAuth callback did not include a token or code.');
       }
 
-      if (
-        provider === 'google' &&
-        directContext?.provider === 'google' &&
-        directContext.codeVerifier
-      ) {
-        const directGoogleUser = await this.exchangeGoogleCodeDirectly(
-          code,
-          directContext.codeVerifier
-        );
-        if (directGoogleUser) {
-          return { user: directGoogleUser };
-        }
-      }
-
       const exchangeResponse = await apiService.exchangeOAuthCode(
         provider,
         code,
@@ -477,8 +544,12 @@ class OAuthService {
       throw new Error(
         `${OAUTH_CONFIG.providers[provider].label} sign-in succeeded, but account data is missing.`
       );
-    } finally {
-      this.directAuthStates.delete(state);
+    } catch (error: any) {
+      this.updateDebugInfo(provider, current => ({
+        ...current,
+        lastError: error?.message ?? 'OAuth sign-in failed.',
+      }));
+      throw error;
     }
   }
 }

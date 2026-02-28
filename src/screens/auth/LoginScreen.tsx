@@ -27,6 +27,7 @@ import { colors, spacing, typography, borderRadius } from '../../styles/theme';
 import biometricService from '../../services/biometric';
 import { apiService } from '../../services/api';
 import haptics from '../../services/haptics';
+import oauthService, { OAuthDebugInfo } from '../../services/oauth';
 
 type AuthNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
@@ -47,8 +48,16 @@ const LoginScreen: React.FC = () => {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometryType, setBiometryType] = useState<string | null>(null);
   const [hasStoredSession, setHasStoredSession] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [googleDebug, setGoogleDebug] = useState<OAuthDebugInfo | null>(null);
+  const [githubDebug, setGithubDebug] = useState<OAuthDebugInfo | null>(null);
   const isOAuthLoading = isLoading && !!pendingProvider;
   const isCredentialsLoading = isLoading && !pendingProvider;
+
+  const refreshDiagnostics = () => {
+    setGoogleDebug(oauthService.getDebugInfo('google'));
+    setGithubDebug(oauthService.getDebugInfo('github'));
+  };
 
   useEffect(() => {
     dispatch(resetTransientState());
@@ -67,6 +76,7 @@ const LoginScreen: React.FC = () => {
       setBiometricAvailable(false);
       setHasStoredSession(false);
     });
+    refreshDiagnostics();
   }, [dispatch]);
 
   const biometricLabel = useMemo(() => {
@@ -109,6 +119,7 @@ const LoginScreen: React.FC = () => {
       haptics.success();
     } catch {
       haptics.error();
+      refreshDiagnostics();
     } finally {
       setPendingProvider(null);
     }
@@ -224,6 +235,50 @@ const LoginScreen: React.FC = () => {
                   : 'Continue with GitHub'}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.debugButton}
+              onPress={() => {
+                refreshDiagnostics();
+                setShowDiagnostics(prev => !prev);
+                haptics.impactLight();
+              }}
+            >
+              <Text style={styles.debugButtonText}>
+                {showDiagnostics ? 'Hide OAuth Diagnostics' : 'Show OAuth Diagnostics'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDiagnostics ? (
+              <View style={styles.debugPanel}>
+                <Text style={styles.debugPanelTitle}>Google OAuth</Text>
+                <Text style={styles.debugLine}>Mode: {googleDebug?.mode ?? 'unknown'}</Text>
+                <Text style={styles.debugLine}>
+                  Selected: {googleDebug?.selectedStartPath ?? 'none'}
+                </Text>
+                <Text style={styles.debugLine}>
+                  Last Error: {googleDebug?.lastError ?? 'none'}
+                </Text>
+                <Text style={styles.debugLine} numberOfLines={2}>
+                  Last URL: {googleDebug?.lastAuthUrl ?? 'none'}
+                </Text>
+                <Text style={styles.debugLine}>
+                  Checks:{' '}
+                  {googleDebug?.checkedPaths
+                    ?.map(item => `${item.path}[${item.status ?? (item.reachable ? 'ok' : 'x')}]`)
+                    .join(', ') || 'none'}
+                </Text>
+
+                <Text style={[styles.debugPanelTitle, styles.debugSubTitle]}>GitHub OAuth</Text>
+                <Text style={styles.debugLine}>Mode: {githubDebug?.mode ?? 'unknown'}</Text>
+                <Text style={styles.debugLine}>
+                  Selected: {githubDebug?.selectedStartPath ?? 'none'}
+                </Text>
+                <Text style={styles.debugLine}>
+                  Last Error: {githubDebug?.lastError ?? 'none'}
+                </Text>
+              </View>
+            ) : null}
 
             {biometricAvailable && hasStoredSession ? (
               <TouchableOpacity
@@ -403,6 +458,37 @@ const styles = StyleSheet.create({
     color: '#F9FAFB',
     fontSize: typography.subhead,
     fontWeight: '600',
+  },
+  debugButton: {
+    marginTop: spacing.xs,
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  debugButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.caption1,
+    textDecorationLine: 'underline',
+  },
+  debugPanel: {
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.medium,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    gap: spacing.xs / 2,
+  },
+  debugPanelTitle: {
+    color: colors.text,
+    fontSize: typography.footnote,
+    fontWeight: '700',
+  },
+  debugSubTitle: {
+    marginTop: spacing.xs,
+  },
+  debugLine: {
+    color: colors.textSecondary,
+    fontSize: typography.caption2,
   },
   biometricButton: {
     borderRadius: borderRadius.medium,
